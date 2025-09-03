@@ -1,17 +1,21 @@
 {
   "mcpServers": {
-	  "file_export": {
-	    "command": "python",
-	    "args": [
-		  "-m",
-		  "LLM_Export.tools.file_export_mcp"
-	    ],
+		"file_export": {
+			"command": "python",
+			"args": [
+				"-m",
+				"tools.file_export_mcp"
+			],
 			"env": {
-				"PYTHONPATH": "{YourPATH}"
+				"PYTHONPATH": "C:\\temp\\LLM_Export",
+				"FILE_EXPORT_BASE_URL": "http://localhost:9003/files",
+				"FILE_EXPORT_DIR": "C:\\temp\\LLM_Export\\output",
+				"PERSISTENT_FILES": "true",
+				"FILES_DELAY": "1"
 			},
-	    "disabled": false,
-	    "autoApprove": []
-	  }
+			"disabled": false,
+			"autoApprove": []
+		}
   },
   "logLevel": "DEBUG"
 }
