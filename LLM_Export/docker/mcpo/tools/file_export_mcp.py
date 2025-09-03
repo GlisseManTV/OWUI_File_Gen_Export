@@ -153,9 +153,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="Heading1", fontSize=16, leading=20, spaceAfter=10, spaceBefore=10, bold=True))
-    styles.add(ParagraphStyle(name="Heading2", fontSize=14, leading=18, spaceAfter=8, spaceBefore=8, bold=True))
-    styles.add(ParagraphStyle(name="Heading3", fontSize=12, leading=15, spaceAfter=6, spaceBefore=6, bold=True))
 
     story = []
     for t in text:
