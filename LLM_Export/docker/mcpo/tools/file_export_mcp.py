@@ -23,6 +23,31 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 BASE_URL_ENV = os.getenv("FILE_EXPORT_BASE_URL")
 BASE_URL = (BASE_URL_ENV or "http://localhost:9003/files").rstrip("/")
 
+LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")  # e.g., DEBUG, INFO, WARNING, 10, etc.
+LOG_FORMAT_ENV = os.getenv(
+    "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
+)
+
+def _resolve_log_level(val: str | None) -> int:
+    if not val:
+        return logging.INFO
+    v = val.strip()
+    if v.isdigit():
+        try:
+            return int(v)
+        except ValueError:
+            return logging.INFO
+    return getattr(logging, v.upper(), logging.INFO)
+
+# Basic logger (honours LOG_LEVEL if you set it)
+logging.basicConfig(
+    level=_resolve_log_level(LOG_LEVEL_ENV),
+    format=LOG_FORMAT_ENV,
+)
+
+log = logging.getLogger("file_export_mcp")
+log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
+log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
 
 mcp = FastMCP("file_export")
 

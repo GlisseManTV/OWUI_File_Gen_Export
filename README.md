@@ -123,30 +123,30 @@ Here is an example of a `docker-compose.yaml` file to run both the file export s
 ```yaml
 services:
   file-export-server:
-    image: ghcr.io/glissemantv/owui-file-export-server:dev-latest
+    image: ghcr.io/glissemantv/owui-file-export-server:latest
     container_name: file-export-server
     environment:
-      - FILE_EXPORT_DIR=/data/output
+      - EXPORT_DIR=/data/output
     ports:
-      - 9003:9003
+      - "9003:9003"
     volumes:
-      - /path/to/your/export/folder:/data/output
+      - /your/export-data:/data/output
+
   owui-mcpo:
-    image: ghcr.io/glissemantv/owui-mcpo:dev-latest
+    image: ghcr.io/glissemantv/owui-mcpo:latest
     container_name: owui-mcpo
     environment:
-      - FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files
+      - FILE_EXPORT_BASE_URL=http://file-export-server:9003/files
       - FILE_EXPORT_DIR=/output
       - MCPO_API_KEY=top-secret
-      - PERSISTENT_FILES=True
       - FILES_DELAY=1
+      - LOG_LEVEL=DEBUG
     ports:
-      - 8000:8000
+      - "8000:8000"
     volumes:
-      - /path/to/your/export/folder:/output
+      - /your/export-data:/output
     depends_on:
       - file-export-server
-networks: {}
 ```
 ---
 
