@@ -43,7 +43,6 @@ def _resolve_log_level(val: str | None) -> int:
             return logging.INFO
     return getattr(logging, v.upper(), logging.INFO)
 
-# Basic logger (honours LOG_LEVEL if you set it)
 logging.basicConfig(
     level=_resolve_log_level(LOG_LEVEL_ENV),
     format=LOG_FORMAT_ENV,
@@ -280,6 +279,12 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         with py7zr.SevenZipFile(archive_path, mode='w') as archive:
             for file_path in generated_files:
                 archive.write(file_path, os.path.basename(file_path))
+    elif archive_format.lower() == "tar.gz":
+        archive_filename = f"{archive_name or 'archive'}_{timestamp}.tar.gz"
+        archive_path = os.path.join(folder_path, archive_filename)
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for file_path in generated_files:
+                tar.add(file_path, arcname=os.path.basename(file_path))
     else: 
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.zip"
         archive_path = os.path.join(folder_path, archive_filename)

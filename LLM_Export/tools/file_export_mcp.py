@@ -1,14 +1,15 @@
 import os
 import uuid
 import emoji
+import time
 import datetime
+import tarfile
 import zipfile
 import py7zr
 import logging
 import threading
 import markdown2
 from bs4 import BeautifulSoup
-import time
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
@@ -33,8 +34,6 @@ LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
 
-
-
 def _resolve_log_level(val: str | None) -> int:
     if not val:
         return logging.INFO
@@ -56,9 +55,7 @@ log = logging.getLogger("file_export_mcp")
 log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
 log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
 
-
 mcp = FastMCP("file_export")
-
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -277,12 +274,19 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         generated_files.append(filepath)
     
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
     if archive_format.lower() == "7z":
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.7z"
         archive_path = os.path.join(folder_path, archive_filename)
         with py7zr.SevenZipFile(archive_path, mode='w') as archive:
             for file_path in generated_files:
                 archive.write(file_path, os.path.basename(file_path))
+    elif archive_format.lower() == "tar.gz":
+        archive_filename = f"{archive_name or 'archive'}_{timestamp}.tar.gz"
+        archive_path = os.path.join(folder_path, archive_filename)
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for file_path in generated_files:
+                tar.add(file_path, arcname=os.path.basename(file_path))
     else: 
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.zip"
         archive_path = os.path.join(folder_path, archive_filename)
