@@ -2,7 +2,6 @@ openpyxl
 reportlab
 mcp
 py7zr
-tarfile
 fastapi
 uvicorn
 python-multipart
