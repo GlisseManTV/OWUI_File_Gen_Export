@@ -113,33 +113,26 @@ fontSize=11,
 leading=14
 ))
 
+def render_html_element(elem):
+    if elem.name == "img":
+        src = elem.get("src")
+        try:
+            img = Image(src, width=200, height=150) 
+            return img
+        except Exception:
+            return Paragraph("[Image non trouvée]", styles["CustomNormal"])
+    elif elem.name == "h1":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading1"])
+    elif elem.name == "h2":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading2"])
+    elif elem.name == "h3":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading3"])
+    else:
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomNormal"])
+
 def render_text_with_emojis(text: str) -> str:
     return emoji.emojize(text, language="alias")
 
-def markdown_to_story(md_text, styles):
-    html = markdown2.markdown(md_text)
-    soup = BeautifulSoup(html, "html.parser")
-    para = Paragraph(render_text_with_emojis(text), styles["CustomNormal"])
-    story = []
-
-    for elem in soup.contents:
-        if elem.name == "h1":
-            story.append(Paragraph(elem.get_text(), styles["Heading1"]))
-        elif elem.name == "h2":
-            story.append(Paragraph(elem.get_text(), styles["Heading2"]))
-        elif elem.name == "h3":
-            story.append(Paragraph(elem.get_text(), styles["Heading3"]))
-        elif elem.name == "ul":
-            items = [ListItem(Paragraph(li.get_text(), styles["Normal"])) for li in elem.find_all("li")]
-            story.append(ListFlowable(items, bulletType="bullet", leftIndent=20))
-        elif elem.name == "ol":
-            items = [ListItem(Paragraph(li.get_text(), styles["Normal"])) for li in elem.find_all("li")]
-            story.append(ListFlowable(items, bulletType="i", leftIndent=20))
-        elif elem.name == "p":
-            story.append(Paragraph(elem.decode_contents(), styles["Normal"]))
-        story.append(Spacer(1, 6))
-
-    return story
 
 def _cleanup_files(folder_path: str, delay_minutes: int):
     """Deletes files in a folder after a specified time."""
@@ -188,13 +181,16 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
 
-    styles = getSampleStyleSheet()
+    md_text = "\n".join(text)
+    html = markdown2.markdown(md_text)
+    soup = BeautifulSoup(html, "html.parser")
 
     story = []
-    for elem in soup.body.children:
+    for elem in soup.contents:
         block = render_html_element(elem)
         if block:
             story.append(block)
+            story.append(Spacer(1, 6))
 
     doc = SimpleDocTemplate(filepath)
     doc.build(story)
