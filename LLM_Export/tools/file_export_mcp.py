@@ -1,16 +1,20 @@
 import os
 import uuid
+import emoji
 import datetime
 import zipfile
 import py7zr
 import logging
 import threading
+import markdown2
+from bs4 import BeautifulSoup
 import time
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 PERSISTENT_FILES = os.getenv("PERSISTENT_FILES", "false")
 FILES_DELAY = int(os.getenv("FILES_DELAY", 60)) 
@@ -28,6 +32,8 @@ LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")  # e.g., DEBUG, INFO, WARNING, 10, etc.
 LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
+
+
 
 def _resolve_log_level(val: str | None) -> int:
     if not val:
@@ -81,9 +87,60 @@ def _generate_filename(folder_path: str, ext: str, filename: str = None) -> tupl
 
     return filepath, filename
 
+    styles = getSampleStyleSheet()
+
+    styles.add(ParagraphStyle(
+        name="CustomHeading1",
+        parent=styles["Heading1"],
+        textColor=colors.HexColor("#0A1F44"),
+        spaceAfter=12
+    ))
+
+    styles.add(ParagraphStyle(
+        name="CustomHeading2",
+        parent=styles["Heading2"],
+        textColor=colors.HexColor("#1C3F77"),
+        spaceAfter=10
+    ))
+
+    styles.add(ParagraphStyle(
+        name="CustomHeading3",
+        parent=styles["Heading3"],
+        textColor=colors.HexColor("#3A6FB0"), 
+        spaceAfter=8
+    ))
+
+    styles.add(ParagraphStyle(
+        name="CustomNormal",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=14
+    ))
+
+def render_html_element(elem):
+    if elem.name == "img":
+        src = elem.get("src")
+        try:
+            img = Image(src, width=200, height=150) 
+            return img
+        except Exception:
+            return Paragraph("[Image non trouvée]", styles["CustomNormal"])
+    elif elem.name == "h1":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading1"])
+    elif elem.name == "h2":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading2"])
+    elif elem.name == "h3":
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading3"])
+    else:
+        return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomNormal"])
+
+def render_text_with_emojis(text: str) -> str:
+    return emoji.emojize(text, language="alias")
+
 def markdown_to_story(md_text, styles):
     html = markdown2.markdown(md_text)
     soup = BeautifulSoup(html, "html.parser")
+    para = Paragraph(render_text_with_emojis(text), styles["CustomNormal"])
     story = []
 
     for elem in soup.contents:
@@ -155,8 +212,10 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
     styles = getSampleStyleSheet()
 
     story = []
-    for t in text:
-        story.extend(markdown_to_story(t, styles))
+    for elem in soup.body.children:
+        block = render_html_element(elem)
+        if block:
+            story.append(block)
 
     doc = SimpleDocTemplate(filepath)
     doc.build(story)
