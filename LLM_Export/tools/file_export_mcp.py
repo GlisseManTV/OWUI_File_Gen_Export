@@ -87,35 +87,35 @@ def _generate_filename(folder_path: str, ext: str, filename: str = None) -> tupl
 
     return filepath, filename
 
-    styles = getSampleStyleSheet()
+styles = getSampleStyleSheet()
 
-    styles.add(ParagraphStyle(
-        name="CustomHeading1",
-        parent=styles["Heading1"],
-        textColor=colors.HexColor("#0A1F44"),
-        spaceAfter=12
-    ))
+styles.add(ParagraphStyle(
+name="CustomHeading1",
+parent=styles["Heading1"],
+textColor=colors.HexColor("#0A1F44"),
+spaceAfter=12
+))
 
-    styles.add(ParagraphStyle(
-        name="CustomHeading2",
-        parent=styles["Heading2"],
-        textColor=colors.HexColor("#1C3F77"),
-        spaceAfter=10
-    ))
+styles.add(ParagraphStyle(
+name="CustomHeading2",
+parent=styles["Heading2"],
+textColor=colors.HexColor("#1C3F77"),
+spaceAfter=10
+))
 
-    styles.add(ParagraphStyle(
-        name="CustomHeading3",
-        parent=styles["Heading3"],
-        textColor=colors.HexColor("#3A6FB0"), 
-        spaceAfter=8
-    ))
+styles.add(ParagraphStyle(
+name="CustomHeading3",
+parent=styles["Heading3"],
+textColor=colors.HexColor("#3A6FB0"), 
+spaceAfter=8
+))
 
-    styles.add(ParagraphStyle(
-        name="CustomNormal",
-        parent=styles["Normal"],
-        fontSize=11,
-        leading=14
-    ))
+styles.add(ParagraphStyle(
+name="CustomNormal",
+parent=styles["Normal"],
+fontSize=11,
+leading=14
+))
 
 def render_html_element(elem):
     if elem.name == "img":
