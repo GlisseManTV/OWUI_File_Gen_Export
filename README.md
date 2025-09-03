@@ -89,7 +89,7 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 
 Use 
 ```
-docker pull ghcr.io/glissemantv/owui_file_gen_export:dev-latest
+docker pull ghcr.io/glissemantv/owui_file_gen_export:latest
 ```
 
 ### 🛠️ DOCKER ENV VARIABLES
@@ -114,7 +114,7 @@ Here is an example of a `docker-compose.yaml` file to run both the file export s
 ```yaml
 services:
   file-export-server:
-    image: ghcr.io/glissemantv/owui-file-export-server:dev-latest
+    image: ghcr.io/glissemantv/owui-file-export-server:latest
     container_name: file-export-server
     environment:
       - FILE_EXPORT_DIR=/data/output
@@ -123,7 +123,7 @@ services:
     volumes:
       - /path/to/your/export/folder:/data/output
   owui-mcpo:
-    image: ghcr.io/glissemantv/owui-mcpo:dev-latest
+    image: ghcr.io/glissemantv/owui-mcpo:latest
     container_name: owui-mcpo
     environment:
       - FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files
