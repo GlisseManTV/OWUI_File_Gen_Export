@@ -124,7 +124,7 @@ def render_html_element(elem):
             img = Image(src, width=200, height=150) 
             return img
         except Exception:
-            return Paragraph("[Image non trouvée]", styles["CustomNormal"])
+            return Paragraph("[Image not found]", styles["CustomNormal"])
     elif elem.name == "h1":
         return Paragraph(render_text_with_emojis(elem.get_text()), styles["CustomHeading1"])
     elif elem.name == "h2":
