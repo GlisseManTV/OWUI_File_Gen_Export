@@ -243,7 +243,12 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
         elif format_type == "pdf":
-            md_text = "\n".join(text)
+            doc = SimpleDocTemplate(filepath)
+            if isinstance(content, list):
+                md_text = "\n".join(content)
+            else:
+                md_text = content
+    
             html = markdown2.markdown(md_text)
             soup = BeautifulSoup(html, "html.parser")
 
@@ -253,8 +258,6 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 if block:
                     story.append(block)
                     story.append(Spacer(1, 6))
-
-            doc = SimpleDocTemplate(filepath)
             doc.build(story)
         elif format_type == "xlsx":
             wb = Workbook()
