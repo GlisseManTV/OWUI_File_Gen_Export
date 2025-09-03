@@ -24,6 +24,32 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 BASE_URL_ENV = os.getenv("FILE_EXPORT_BASE_URL")
 BASE_URL = (BASE_URL_ENV or "http://localhost:9003/files").rstrip("/")
 
+LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")  # e.g., DEBUG, INFO, WARNING, 10, etc.
+LOG_FORMAT_ENV = os.getenv(
+    "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
+)
+
+def _resolve_log_level(val: str | None) -> int:
+    if not val:
+        return logging.INFO
+    v = val.strip()
+    if v.isdigit():
+        try:
+            return int(v)
+        except ValueError:
+            return logging.INFO
+    return getattr(logging, v.upper(), logging.INFO)
+
+# Basic logger (honours LOG_LEVEL if you set it)
+logging.basicConfig(
+    level=_resolve_log_level(LOG_LEVEL_ENV),
+    format=LOG_FORMAT_ENV,
+)
+
+log = logging.getLogger("file_export_mcp")
+log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
+log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
+
 
 mcp = FastMCP("file_export")
 
@@ -54,6 +80,30 @@ def _generate_filename(folder_path: str, ext: str, filename: str = None) -> tupl
         counter += 1
 
     return filepath, filename
+
+def markdown_to_story(md_text, styles):
+    html = markdown2.markdown(md_text)
+    soup = BeautifulSoup(html, "html.parser")
+    story = []
+
+    for elem in soup.contents:
+        if elem.name == "h1":
+            story.append(Paragraph(elem.get_text(), styles["Heading1"]))
+        elif elem.name == "h2":
+            story.append(Paragraph(elem.get_text(), styles["Heading2"]))
+        elif elem.name == "h3":
+            story.append(Paragraph(elem.get_text(), styles["Heading3"]))
+        elif elem.name == "ul":
+            items = [ListItem(Paragraph(li.get_text(), styles["Normal"])) for li in elem.find_all("li")]
+            story.append(ListFlowable(items, bulletType="bullet", leftIndent=20))
+        elif elem.name == "ol":
+            items = [ListItem(Paragraph(li.get_text(), styles["Normal"])) for li in elem.find_all("li")]
+            story.append(ListFlowable(items, bulletType="i", leftIndent=20))
+        elif elem.name == "p":
+            story.append(Paragraph(elem.decode_contents(), styles["Normal"]))
+        story.append(Spacer(1, 6))
+
+    return story
 
 def _cleanup_files(folder_path: str, delay_minutes: int):
     """Deletes files in a folder after a specified time."""
@@ -101,17 +151,22 @@ def create_csv(data: list[list[str]], filename: str = None, persistent: bool = P
 def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
-    doc = SimpleDocTemplate(filepath)
+
     styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="Heading1", fontSize=16, leading=20, spaceAfter=10, spaceBefore=10, bold=True))
+    styles.add(ParagraphStyle(name="Heading2", fontSize=14, leading=18, spaceAfter=8, spaceBefore=8, bold=True))
+    styles.add(ParagraphStyle(name="Heading3", fontSize=12, leading=15, spaceAfter=6, spaceBefore=6, bold=True))
+
     story = []
     for t in text:
-        story.append(Paragraph(t, styles["Normal"]))
-        story.append(Spacer(1, 12))
+        story.extend(markdown_to_story(t, styles))
+
+    doc = SimpleDocTemplate(filepath)
     doc.build(story)
-    
+
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
-    
+
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()
