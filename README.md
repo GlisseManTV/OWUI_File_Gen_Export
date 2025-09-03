@@ -224,5 +224,21 @@ MIT License – Feel free to use, modify, and distribute.
 
 ---
 
-📬 **Need help?** Open an issue or start a discussion on GitHub!
+📬 **Need help?** Open an issue or start a discussion on GitHub! 
+
+---
+
+## 🌟 Credits
+
+A big thank you to the contributors and open-source projects that made this work possible:
+
+- **tjbck** for creating [**Open WebUI**](https://github.com/open-webui/open-webui) and [**mcpo**](https://github.com/open-webui/mcpo), foundational pillars of this integration.
+
+- [**modelcontextprotocol/servers**](https://github.com/modelcontextprotocol/servers) for high-quality tools and architectural inspiration that guided the development of MCP servers and file generation workflows.
+
+-  [**gentoorax**](https://chrislaw.me/) for close collaboration, technical rigor, and invaluable contributions to the quality and stability of this project.
+
+Thank you to everyone for your passion, expertise, and dedication to the open-source community. 🙌
+
+---
 
