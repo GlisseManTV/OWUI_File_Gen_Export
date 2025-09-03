@@ -3,6 +3,7 @@ import uuid
 import emoji
 import datetime
 import zipfile
+import tarfile
 import py7zr
 import logging
 import threading
