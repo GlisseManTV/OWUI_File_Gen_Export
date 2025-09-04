@@ -89,8 +89,8 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 
 Use 
 ```
-docker pull ghcr.io/glissemantv/owui-file-export-server:dev-latest
-docker pull ghcr.io/glissemantv/owui-mcpo:dev-latest
+docker pull ghcr.io/glissemantv/owui-file-export-server:latest
+docker pull ghcr.io/glissemantv/owui-mcpo:latest
 ```
 
 ### 🛠️ DOCKER ENV VARIABLES
@@ -116,7 +116,7 @@ For OWUI-FILE-EXPORT-SERVER
 Here is an example of a docker run script file to run both the file export server and the MCPO server:
 ```
 docker run -d --name file-export-server --network host -e FILE_EXPORT_DIR=/data/output -p 9003:9003 -v /path/to/your/export/folder:/data/output ghcr.io/glissemantv/owui-file-export-server:latest
-docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:latest
+docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e -e LOG_LEVEL=INFO -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:latest
 ```
 
 Here is an example of a `docker-compose.yaml` file to run both the file export server and the MCPO server:
@@ -141,7 +141,7 @@ services:
       - MCPO_API_KEY=top-secret
 	  - PERSISTENT_FILES=true
       - FILES_DELAY=1
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
     ports:
       - "8000:8000"
     volumes:
@@ -228,3 +228,73 @@ MIT License – Feel free to use, modify, and distribute.
 
 📬 **Need help?** Open an issue or start a discussion on GitHub!
 
+
+---
+
+# 🚀 Quick Start for Development Versions
+
+## Using development versions of libraries is at your own risk. Always test in a safe environment first.
+
+Use 
+```
+docker pull ghcr.io/glissemantv/owui-file-export-server:dev-latest
+docker pull ghcr.io/glissemantv/owui-mcpo:dev-latest
+```
+
+### 🛠️ DOCKER ENV VARIABLES
+
+For OWUI-MCPO
+   - `MCPO_API_KEY`: Your MCPO API key (no default value, not mandatory but advised)
+   - `FILE_EXPORT_BASE_URL`: URL of your file export server (default is `http://localhost:9003/files`)
+   - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `/output`) path must be mounted as a volume
+   - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
+   - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
+
+For OWUI-FILE-EXPORT-SERVER
+   - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
+
+> ✅ This ensures MCPO can correctly reach the file export server.
+> ❌ If not set, file export will fail with a 404 or connection error.
+
+---
+
+### DOCKER EXAMPLE
+
+
+Here is an example of a docker run script file to run both the file export server and the MCPO server:
+```
+docker run -d --name file-export-server --network host -e FILE_EXPORT_DIR=/data/output -p 9003:9003 -v /path/to/your/export/folder:/data/output ghcr.io/glissemantv/owui-file-export-server:dev-latest
+docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e LOG_LEVEL=DEBUG -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:dev-latest
+```
+
+Here is an example of a `docker-compose.yaml` file to run both the file export server and the MCPO server:
+```yaml
+services:
+  file-export-server:
+    image: ghcr.io/glissemantv/owui-file-export-server:dev-latest
+    container_name: file-export-server
+    environment:
+      - FILE_EXPORT_DIR=/output
+    ports:
+      - "9003:9003"
+    volumes:
+      - /your/export-data:/output
+
+  owui-mcpo:
+    image: ghcr.io/glissemantv/owui-mcpo:dev-latest
+    container_name: owui-mcpo
+    environment:
+      - FILE_EXPORT_BASE_URL=http://file-export-server:9003/files
+      - FILE_EXPORT_DIR=/output
+      - MCPO_API_KEY=top-secret
+	  - PERSISTENT_FILES=true
+      - FILES_DELAY=1
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8000:8000"
+    volumes:
+      - /your/export-data:/output
+    depends_on:
+      - file-export-server
+```
+---
