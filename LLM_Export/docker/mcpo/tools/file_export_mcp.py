@@ -248,10 +248,8 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 md_text = "\n".join(content)
             else:
                 md_text = content
-    
             html = markdown2.markdown(md_text)
             soup = BeautifulSoup(html, "html.parser")
-
             story = []
             for elem in soup.contents:
                 block = render_html_element(elem)
