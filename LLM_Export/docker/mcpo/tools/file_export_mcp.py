@@ -284,16 +284,13 @@ def render_html_elements(soup):
     
     return story
 
-
 def _cleanup_files(folder_path: str, delay_minutes: int):
-    """Deletes files in a folder after a specified time."""
     def delete_files():
         time.sleep(delay_minutes * 60)
         try:
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    os.remove(os.path.join(root, file))
-            os.rmdir(folder_path)
+            import shutil
+            shutil.rmtree(folder_path) 
+            log.info(f"Folder {folder_path} deleted.")
         except Exception as e:
             logging.error(f"Error deleting files : {e}")
 
@@ -374,7 +371,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         _cleanup_files(folder_path, FILES_DELAY)
 
     return {"url": _public_url(folder_path, fname)}
-
 
 @mcp.tool()
 def create_file(content: str, filename: str, persistent: bool = PERSISTENT_FILES) -> dict:
@@ -458,7 +454,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 log.info(f"PDF '{fname}' successfully created in the archive.")
             except Exception as e:
                 log.error(f"Error during PDF construction '{fname}' in archive: {e}")
-                simple_story = [Paragraph("Error generating PDF"., styles["CustomNormal"])]
+                simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
                 doc.build(simple_story)
                 
         elif format_type == "xlsx":
