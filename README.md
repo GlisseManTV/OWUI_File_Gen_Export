@@ -126,11 +126,11 @@ services:
     image: ghcr.io/glissemantv/owui-file-export-server:latest
     container_name: file-export-server
     environment:
-      - EXPORT_DIR=/data/output
+      - FILE_EXPORT_DIR=/output
     ports:
       - "9003:9003"
     volumes:
-      - /your/export-data:/data/output
+      - /your/export-data:/output
 
   owui-mcpo:
     image: ghcr.io/glissemantv/owui-mcpo:latest
@@ -139,6 +139,7 @@ services:
       - FILE_EXPORT_BASE_URL=http://file-export-server:9003/files
       - FILE_EXPORT_DIR=/output
       - MCPO_API_KEY=top-secret
+	  - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
     ports:
@@ -155,7 +156,7 @@ services:
 - ✅ `.xlsx` (Excel)
 - ✅ `.pdf` (PDF)
 - ✅ `.csv` (CSV)
-- ✅ `.zip` and `.7z` (Archives)
+- ✅ `.zip`n `tar.gz` and `.7z` (Archives)
 - ✅ Any other file type 
 
 ---
@@ -174,13 +175,14 @@ OWUI_File_Gen_Export/
 │   │   ├── Dockerfile.server
 │   │   ├── file_server_compose.yaml
 │   │   └── file_export_server.py
-│   └── mcpo/
-│       ├── Dockerfile
-│       ├── requirements.txt
-│       ├── config.json
-│       ├── MCPO_server_compose.yaml
-│       └──tools/
-│           └── file_export_mcp.py
+│   ├── mcpo/
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   ├── config.json
+│   │   ├── MCPO_server_compose.yaml
+│   │   └──tools/
+│   │       └── file_export_mcp.py
+│   └── docker-compose.yaml
 └── README.md
 ```
 
