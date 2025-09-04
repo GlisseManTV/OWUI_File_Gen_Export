@@ -454,7 +454,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 log.info(f"PDF '{fname}' successfully created in the archive.")
             except Exception as e:
                 log.error(f"Error during PDF construction '{fname}' in archive: {e}")
-                simple_story = [Paragraph("Error generating PDF"., styles["CustomNormal"])]
+                simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
                 doc.build(simple_story)
                 
         elif format_type == "xlsx":
