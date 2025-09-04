@@ -92,6 +92,7 @@ Use
 docker pull ghcr.io/glissemantv/owui-file-export-server:latest
 docker pull ghcr.io/glissemantv/owui-mcpo:latest
 ```
+	
 
 ### 🛠️ DOCKER ENV VARIABLES
 
@@ -112,11 +113,11 @@ For OWUI-FILE-EXPORT-SERVER
 
 ### DOCKER EXAMPLE
 
-
 Here is an example of a docker run script file to run both the file export server and the MCPO server:
 ```
 docker run -d --name file-export-server --network host -e FILE_EXPORT_DIR=/data/output -p 9003:9003 -v /path/to/your/export/folder:/data/output ghcr.io/glissemantv/owui-file-export-server:latest
 docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e -e LOG_LEVEL=INFO -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:latest
+
 ```
 
 Here is an example of a `docker-compose.yaml` file to run both the file export server and the MCPO server:
@@ -226,7 +227,23 @@ MIT License – Feel free to use, modify, and distribute.
 
 ---
 
-📬 **Need help?** Open an issue or start a discussion on GitHub!
+📬 **Need help?** Open an issue or start a discussion on GitHub! 
+
+---
+
+## 🌟 Credits
+
+A big thank you to the contributors and open-source projects that made this work possible:
+
+- **tjbck** for creating [**Open WebUI**](https://github.com/open-webui/open-webui) and [**mcpo**](https://github.com/open-webui/mcpo), foundational pillars of this integration.
+
+- [**modelcontextprotocol/servers**](https://github.com/modelcontextprotocol/servers) for high-quality tools and architectural inspiration that guided the development of MCP servers and file generation workflows.
+
+-  [**gentoorax**](https://chrislaw.me/) for close collaboration, technical rigor, and invaluable contributions to the quality and stability of this project.
+
+Thank you to everyone for your passion, expertise, and dedication to the open-source community. 🙌
+
+---
 
 
 ---
