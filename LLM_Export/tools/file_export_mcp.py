@@ -1,16 +1,23 @@
 import os
 import uuid
+import emoji
+import time
 import datetime
+import tarfile
 import zipfile
 import py7zr
 import logging
 import threading
-import time
+import markdown2
+from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.units import mm
 
 PERSISTENT_FILES = os.getenv("PERSISTENT_FILES", "false")
 FILES_DELAY = int(os.getenv("FILES_DELAY", 60)) 
@@ -24,9 +31,32 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 BASE_URL_ENV = os.getenv("FILE_EXPORT_BASE_URL")
 BASE_URL = (BASE_URL_ENV or "http://localhost:9003/files").rstrip("/")
 
+LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")
+LOG_FORMAT_ENV = os.getenv(
+    "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
+)
+
+def _resolve_log_level(val: str | None) -> int:
+    if not val:
+        return logging.INFO
+    v = val.strip()
+    if v.isdigit():
+        try:
+            return int(v)
+        except ValueError:
+            return logging.INFO
+    return getattr(logging, v.upper(), logging.INFO)
+
+logging.basicConfig(
+    level=_resolve_log_level(LOG_LEVEL_ENV),
+    format=LOG_FORMAT_ENV,
+)
+
+log = logging.getLogger("file_export_mcp")
+log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
+log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
 
 mcp = FastMCP("file_export")
-
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -55,15 +85,212 @@ def _generate_filename(folder_path: str, ext: str, filename: str = None) -> tupl
 
     return filepath, filename
 
+styles = getSampleStyleSheet()
+
+styles.add(ParagraphStyle(
+    name="CustomHeading1",
+    parent=styles["Heading1"],
+    textColor=colors.HexColor("#0A1F44"),
+    fontSize=18,
+    spaceAfter=16,
+    spaceBefore=12,
+    alignment=TA_LEFT
+))
+
+styles.add(ParagraphStyle(
+    name="CustomHeading2",
+    parent=styles["Heading2"],
+    textColor=colors.HexColor("#1C3F77"),
+    fontSize=14,
+    spaceAfter=12,
+    spaceBefore=10,
+    alignment=TA_LEFT
+))
+
+styles.add(ParagraphStyle(
+    name="CustomHeading3",
+    parent=styles["Heading3"],
+    textColor=colors.HexColor("#3A6FB0"), 
+    fontSize=12,
+    spaceAfter=10,
+    spaceBefore=8,
+    alignment=TA_LEFT
+))
+
+styles.add(ParagraphStyle(
+    name="CustomNormal",
+    parent=styles["Normal"],
+    fontSize=11,
+    leading=14,
+    alignment=TA_LEFT
+))
+
+styles.add(ParagraphStyle(
+    name="CustomListItem",
+    parent=styles["Normal"],
+    fontSize=11,
+    leading=14,
+    alignment=TA_LEFT
+))
+
+styles.add(ParagraphStyle(
+    name="CustomCode",
+    parent=styles["Code"],
+    fontSize=10,
+    leading=12,
+    fontName="Courier",
+    backColor=colors.HexColor("#F5F5F5"),
+    borderColor=colors.HexColor("#CCCCCC"),
+    borderWidth=1,
+    leftIndent=10,
+    rightIndent=10,
+    topPadding=5,
+    bottomPadding=5
+))
+
+def render_text_with_emojis(text: str) -> str:
+    if not text:
+        return ""
+    try:
+        converted = emoji.emojize(text, language="alias")
+        return converted
+    except Exception as e:
+        log.error(f"Error in emoji conversion: {e}")
+        return text
+
+def process_list_items(ul_or_ol_element, is_ordered=False):
+    items = []
+    bullet_type = '1' if is_ordered else 'bullet'
+
+    for li in ul_or_ol_element.find_all('li', recursive=False):
+        li_text_parts = []
+        for content in li.contents:
+            if isinstance(content, NavigableString):
+                li_text_parts.append(str(content))
+            elif content.name not in ['ul', 'ol']:
+                 li_text_parts.append(content.get_text())
+        li_text = ''.join(li_text_parts).strip()
+
+        list_item_paragraph = None
+        if li_text:
+            rendered_text = render_text_with_emojis(li_text)
+            list_item_paragraph = Paragraph(rendered_text, styles["CustomListItem"])
+
+        sub_lists = li.find_all(['ul', 'ol'], recursive=False)
+        sub_flowables = []
+
+        if list_item_paragraph:
+             sub_flowables.append(list_item_paragraph)
+
+        for sub_list in sub_lists:
+            is_sub_ordered = sub_list.name == 'ol'
+            nested_items = process_list_items(sub_list, is_sub_ordered)
+            if nested_items:
+                nested_list_flowable = ListFlowable(
+                    nested_items,
+                    bulletType='1' if is_sub_ordered else 'bullet',
+                    leftIndent=10 * mm,
+                    bulletIndent=5 * mm,
+                    spaceBefore=2,
+                    spaceAfter=2
+                )
+                sub_flowables.append(nested_list_flowable)
+
+        if sub_flowables:
+            items.append(ListItem(sub_flowables))
+
+    return items
+
+def render_html_elements(soup):
+    story = []
+    
+    for elem in soup.children:
+        if isinstance(elem, NavigableString):
+            text = str(elem).strip()
+            if text:
+                story.append(Paragraph(render_text_with_emojis(text), styles["CustomNormal"]))
+                story.append(Spacer(1, 6))
+        
+        elif hasattr(elem, 'name'):
+            tag_name = elem.name
+            if tag_name == "h1":
+                text = render_text_with_emojis(elem.get_text().strip())
+                story.append(Paragraph(text, styles["CustomHeading1"]))
+                story.append(Spacer(1, 10))
+                
+            elif tag_name == "h2":
+                text = render_text_with_emojis(elem.get_text().strip())
+                story.append(Paragraph(text, styles["CustomHeading2"]))
+                story.append(Spacer(1, 8))
+                
+            elif tag_name == "h3":
+                text = render_text_with_emojis(elem.get_text().strip())
+                story.append(Paragraph(text, styles["CustomHeading3"]))
+                story.append(Spacer(1, 6))
+                
+            elif tag_name == "p":
+                text = render_text_with_emojis(elem.get_text().strip())
+                if text:
+                    story.append(Paragraph(text, styles["CustomNormal"]))
+                    story.append(Spacer(1, 6))
+                    
+            elif tag_name in ["ul", "ol"]:
+                is_ordered = tag_name == "ol"
+                items = process_list_items(elem, is_ordered)
+                if items:
+                    list_flowable = ListFlowable(
+                        items,
+                        bulletType='1' if is_ordered else 'bullet',
+                        leftIndent=10 * mm,
+                        bulletIndent=5 * mm,
+                        spaceBefore=6,
+                        spaceAfter=10
+                    )
+                    story.append(list_flowable)
+                    
+            elif tag_name == "blockquote":
+                text = render_text_with_emojis(elem.get_text().strip())
+                if text:
+                    story.append(Paragraph(f"{text}", styles["CustomNormal"]))
+                    story.append(Spacer(1, 8))
+                    
+            elif tag_name in ["code", "pre"]:
+                text = elem.get_text().strip()
+                if text:
+                    story.append(Paragraph(text, styles["CustomCode"]))
+                    story.append(Spacer(1, 6 if tag_name == "code" else 8))
+                    
+            elif tag_name == "img":
+                src = elem.get("src")
+                alt = elem.get("alt", "[Image]")
+                if src:
+                    try:
+                        img = Image(src, width=200, height=150)
+                        story.append(img)
+                        story.append(Spacer(1, 10))
+                    except Exception as e:
+                        log.error(f"Error image loading {src}: {e}")
+                        story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
+                        story.append(Spacer(1, 6))
+                    
+            elif tag_name == "br":
+                story.append(Spacer(1, 6))
+                
+            else:
+                text = elem.get_text().strip()
+                if text:
+                    story.append(Paragraph(render_text_with_emojis(text), styles["CustomNormal"]))
+                    story.append(Spacer(1, 6))
+    
+    return story
+
 def _cleanup_files(folder_path: str, delay_minutes: int):
-    """Deletes files in a folder after a specified time."""
     def delete_files():
         time.sleep(delay_minutes * 60)
         try:
-            for root, dirs, files in os.walk(folder_path):
-                for file in files:
-                    os.remove(os.path.join(root, file))
-            os.rmdir(folder_path)
+            import shutil
+            shutil.rmtree(folder_path) 
+            log.info(f"Folder {folder_path} deleted.")
         except Exception as e:
             logging.error(f"Error deleting files : {e}")
 
@@ -101,17 +328,48 @@ def create_csv(data: list[list[str]], filename: str = None, persistent: bool = P
 def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
-    doc = SimpleDocTemplate(filepath)
-    styles = getSampleStyleSheet()
-    story = []
-    for t in text:
-        story.append(Paragraph(t, styles["Normal"]))
-        story.append(Spacer(1, 12))
-    doc.build(story)
+
+    md_text = "\n".join(text)
     
+    html = markdown2.markdown(
+        md_text,
+        extras=[
+            'fenced-code-blocks',
+            'tables',
+            'break-on-newline',
+            'cuddled-lists', 
+            'metadata',
+            'smarty-pants'
+        ]
+    )
+    log.debug(f"Generated HTML:\n{html}") 
+
+    soup = BeautifulSoup(html, "html.parser")
+    
+    story = render_html_elements(soup)
+    
+    if not story:
+        story = [Paragraph("Empty Content", styles["CustomNormal"])]
+    
+    doc = SimpleDocTemplate(
+        filepath,
+        topMargin=72,
+        bottomMargin=72,
+        leftMargin=72,
+        rightMargin=72
+    )
+    
+    try:
+        doc.build(story)
+        log.info(f"PDF creation succeed: {filepath}")
+    except Exception as e:
+        log.error(f"Error in PDF building: {e}")
+        simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
+        doc.build(simple_story)
+
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
-    
+
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()
@@ -157,17 +415,48 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
         elif format_type == "pdf":
-            doc = SimpleDocTemplate(filepath)
-            styles = getSampleStyleSheet()
-            story = []
+
             if isinstance(content, list):
-                for t in content:
-                    story.append(Paragraph(t, styles["Normal"]))
-                    story.append(Spacer(1, 12))
+                md_text = "\n".join(content)
             else:
-                story.append(Paragraph(content, styles["Normal"]))
-                story.append(Spacer(1, 12))
-            doc.build(story)
+                md_text = (content) 
+            
+            html = markdown2.markdown(
+                md_text,
+                extras=[
+                    'fenced-code-blocks',
+                    'tables',
+                    'break-on-newline',
+                    'cuddled-lists', 
+                    'metadata',
+                    'smarty-pants'
+                ]
+            )
+            log.debug(f"HTML generated for {fname}:\n{html}") 
+
+            soup = BeautifulSoup(html, "html.parser")
+            
+            story = render_html_elements(soup) 
+            
+            if not story:
+                story = [Paragraph("Empty content", styles["CustomNormal"])]
+            
+            doc = SimpleDocTemplate(
+                filepath,
+                topMargin=72,
+                bottomMargin=72,
+                leftMargin=72,
+                rightMargin=72
+            )
+            
+            try:
+                doc.build(story)
+                log.info(f"PDF '{fname}' successfully created in the archive.")
+            except Exception as e:
+                log.error(f"Error during PDF construction '{fname}' in archive: {e}")
+                simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
+                doc.build(simple_story)
+                
         elif format_type == "xlsx":
             wb = Workbook()
             ws = wb.active
@@ -188,12 +477,19 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         generated_files.append(filepath)
     
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
     if archive_format.lower() == "7z":
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.7z"
         archive_path = os.path.join(folder_path, archive_filename)
         with py7zr.SevenZipFile(archive_path, mode='w') as archive:
             for file_path in generated_files:
                 archive.write(file_path, os.path.basename(file_path))
+    elif archive_format.lower() == "tar.gz":
+        archive_filename = f"{archive_name or 'archive'}_{timestamp}.tar.gz"
+        archive_path = os.path.join(folder_path, archive_filename)
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for file_path in generated_files:
+                tar.add(file_path, arcname=os.path.basename(file_path))
     else: 
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.zip"
         archive_path = os.path.join(folder_path, archive_filename)
