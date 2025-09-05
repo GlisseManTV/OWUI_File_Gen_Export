@@ -409,13 +409,13 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         if content is None:
             content = ""        
 
-        filepath, fname = _generate_filename(folder_path, format_type, filename)
+        filepath = os.path.join(folder_path, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)  
         
         if format_type == "py" or format_type == "cs" or format_type == "txt":
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(content)
         elif format_type == "pdf":
-
             if isinstance(content, list):
                 md_text = "\n".join(content)
             else:
@@ -432,7 +432,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     'smarty-pants'
                 ]
             )
-            log.debug(f"HTML generated for {fname}:\n{html}") 
+            log.debug(f"HTML generated for {filename}:\n{html}") 
 
             soup = BeautifulSoup(html, "html.parser")
             
@@ -451,9 +451,9 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
             
             try:
                 doc.build(story)
-                log.info(f"PDF '{fname}' successfully created in the archive.")
+                log.info(f"PDF '{filename}' successfully created in the archive.")
             except Exception as e:
-                log.error(f"Error during PDF construction '{fname}' in archive: {e}")
+                log.error(f"Error during PDF construction '{filename}' in archive: {e}")
                 simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
                 doc.build(simple_story)
                 
@@ -483,19 +483,19 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         archive_path = os.path.join(folder_path, archive_filename)
         with py7zr.SevenZipFile(archive_path, mode='w') as archive:
             for file_path in generated_files:
-                archive.write(file_path, os.path.basename(file_path))
+                archive.write(file_path, os.path.relpath(file_path, folder_path))
     elif archive_format.lower() == "tar.gz":
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.tar.gz"
         archive_path = os.path.join(folder_path, archive_filename)
         with tarfile.open(archive_path, "w:gz") as tar:
             for file_path in generated_files:
-                tar.add(file_path, arcname=os.path.basename(file_path))
+                tar.add(file_path, arcname=os.path.relpath(file_path, folder_path))
     else: 
         archive_filename = f"{archive_name or 'archive'}_{timestamp}.zip"
         archive_path = os.path.join(folder_path, archive_filename)
         with zipfile.ZipFile(archive_path, 'w') as zipf:
             for file_path in generated_files:
-                zipf.write(file_path, os.path.basename(file_path))
+                zipf.write(file_path, os.path.relpath(file_path, folder_path))
     
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
