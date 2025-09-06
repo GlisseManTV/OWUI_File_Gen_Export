@@ -1,4 +1,6 @@
 import os
+import ast
+import json
 import uuid
 import emoji
 import time
@@ -396,6 +398,34 @@ def create_file(content: str, filename: str, persistent: bool = PERSISTENT_FILES
     return {"url": _public_url(folder_path, filename)}
 
 @mcp.tool()
+def create_presentation(slides_data: list[dict], filename: str = None, persistent: bool = PERSISTENT_FILES, title: str = None) -> dict:
+    folder_path = _generate_unique_folder()
+    filepath, fname = _generate_filename(folder_path, "pptx", filename)
+    
+    prs = Presentation()
+    title_slide_layout = prs.slide_layouts[0]
+    slide = prs.slides.add_slide(title_slide_layout)
+    title_shape = slide.shapes.title
+    title_shape.text = title
+
+    for slide_data in slides_data:
+        slide_layout = prs.slide_layouts[1]
+        slide = prs.slides.add_slide(slide_layout)
+        title_shape = slide.shapes.title
+        title_shape.text = slide_data["title"]
+        
+        content = "\n".join(slide_data["content"]) if isinstance(slide_data["content"], list) else slide_data["content"]
+        content_shape = slide.placeholders[1]
+        content_shape.text = content
+
+    prs.save(filepath)
+
+    if not persistent:
+        _cleanup_files(folder_path, FILES_DELAY)
+
+    return {"url": _public_url(folder_path, fname)}
+
+@mcp.tool()
 def generate_and_archive(files_data: list[dict], archive_format: str = "zip", archive_name: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
     folder_path = _generate_unique_folder()
     
@@ -405,77 +435,120 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         filename = file_info.get("filename")
         content = file_info.get("content")
         format_type = file_info.get("format")
+        title_param = file_info.get("title") 
  
         if content is None:
-            content = ""        
+            content = ""    
+        if title_param is None:
+            title_param = ""
 
         filepath = os.path.join(folder_path, filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)  
-        
-        if format_type == "py" or format_type == "cs" or format_type == "txt":
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
-        elif format_type == "pdf":
-            if isinstance(content, list):
-                md_text = "\n".join(content)
-            else:
-                md_text = (content) 
-            
-            html = markdown2.markdown(
-                md_text,
-                extras=[
-                    'fenced-code-blocks',
-                    'tables',
-                    'break-on-newline',
-                    'cuddled-lists', 
-                    'metadata',
-                    'smarty-pants'
-                ]
-            )
-            log.debug(f"HTML generated for {filename}:\n{html}") 
 
-            soup = BeautifulSoup(html, "html.parser")
-            
-            story = render_html_elements(soup) 
-            
-            if not story:
-                story = [Paragraph("Empty content", styles["CustomNormal"])]
-            
-            doc = SimpleDocTemplate(
-                filepath,
-                topMargin=72,
-                bottomMargin=72,
-                leftMargin=72,
-                rightMargin=72
-            )
-            
-            try:
-                doc.build(story)
-                log.info(f"PDF '{filename}' successfully created in the archive.")
-            except Exception as e:
-                log.error(f"Error during PDF construction '{filename}' in archive: {e}")
-                simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
-                doc.build(simple_story)
-                
-        elif format_type == "xlsx":
-            wb = Workbook()
-            ws = wb.active
-            if isinstance(content, list):
-                for row in content:
-                    ws.append(row)
-            wb.save(filepath)
-        elif format_type == "csv":
-            with open(filepath, "w", newline="", encoding="utf-8") as f:
+        try:
+            if format_type == "py" or format_type == "cs" or format_type == "txt":
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+            elif format_type == "pdf":
                 if isinstance(content, list):
-                    csv.writer(f).writerows(content)
+                    md_text = "\n".join(content)
                 else:
-                    csv.writer(f).writerow([content])
-        else:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
-        
-        generated_files.append(filepath)
-    
+                    md_text = content
+                
+                html = markdown2.markdown(
+                    md_text,
+                    extras=[
+                        'fenced-code-blocks',
+                        'tables',
+                        'break-on-newline',
+                        'cuddled-lists', 
+                        'metadata',
+                        'smarty-pants'
+                    ]
+                )
+                log.debug(f"HTML generated for {filename}:\n{html}") 
+
+                soup = BeautifulSoup(html, "html.parser")
+                story = render_html_elements(soup) 
+                
+                if not story:
+                    story = [Paragraph("Empty content", styles["CustomNormal"])]
+                
+                doc = SimpleDocTemplate(
+                    filepath,
+                    topMargin=72,
+                    bottomMargin=72,
+                    leftMargin=72,
+                    rightMargin=72
+                )
+                
+                try:
+                    doc.build(story)
+                    log.info(f"PDF '{filename}' successfully created in the archive.")
+                except Exception as e:
+                    log.error(f"Error during PDF construction '{filename}' in archive: {e}")
+                    simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
+                    doc.build(simple_story)
+                    
+            elif format_type == "xlsx":
+                wb = Workbook()
+                ws = wb.active
+                if isinstance(content, list):
+                    for row in content:
+                        ws.append(row)
+                wb.save(filepath)
+            elif format_type == "csv":
+                with open(filepath, "w", newline="", encoding="utf-8") as f:
+                    if isinstance(content, list):
+                        csv.writer(f).writerows(content)
+                    else:
+                        csv.writer(f).writerow([content])
+            elif format_type == "pptx":
+                if isinstance(content, str):
+                    try:
+                        parsed_content = ast.literal_eval(content)
+                        if not isinstance(parsed_content, list):
+                            raise ValueError("Parsed content is not a list")
+                    except (ValueError, SyntaxError):
+                        raise ValueError(f"Invalid format for pptx content: expected list of dicts, got '{type(content).__name__}'")
+                else:
+                    parsed_content = content
+
+                prs = Presentation()
+                title_slide_layout = prs.slide_layouts[0]
+                slide = prs.slides.add_slide(title_slide_layout)
+                title_shape = slide.shapes.title
+                title_shape.text = title_param or "Presentation"
+
+                for slide_data in parsed_content:
+                    if not isinstance(slide_data, dict):
+                        raise ValueError("Each slide must be a dictionary.")
+                    
+                    title = slide_data.get("title", "Untitled")
+                    content_list = slide_data.get("content", [])
+                    
+                    if not isinstance(content_list, list):
+                        content_list = [content_list]
+
+                    slide_layout = prs.slide_layouts[1]
+                    slide = prs.slides.add_slide(slide_layout)
+                    title_shape = slide.shapes.title
+                    title_shape.text = title
+
+                    content_text = "\n".join(content_list)
+                    content_shape = slide.placeholders[1]
+                    content_shape.text = content_text
+
+                prs.save(filepath)
+            else:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+            
+            generated_files.append(filepath)
+        except Exception as e:
+            log.error(f"Error processing file '{filename}': {e}")
+            raise 
+
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     if archive_format.lower() == "7z":
