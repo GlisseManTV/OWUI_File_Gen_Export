@@ -40,6 +40,7 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `PYTHONPATH\output`)
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is false)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
 
 3. Install dependencies:
    ```bash
@@ -75,6 +76,7 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 				"FILE_EXPORT_DIR": "C:\\temp\\LLM_Export\\output", <==== HERE set the directory where files will be saved (must match the server's export directory)
 				"PERSISTENT_FILES": "false", <==== HERE set to true to keep files after download, false to delete after delay
 				"FILES_DELAY": "60" <==== HERE set the delay in minut to wait before checking for new files
+                "UNSPLASH_ACCESS_KEY": <== Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
 			},
 			"disabled": false,
 			"autoApprove": []
@@ -102,6 +104,7 @@ For OWUI-MCPO
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `/output`) path must be mounted as a volume
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
 
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
@@ -116,7 +119,7 @@ For OWUI-FILE-EXPORT-SERVER
 Here is an example of a docker run script file to run both the file export server and the MCPO server:
 ```
 docker run -d --name file-export-server --network host -e FILE_EXPORT_DIR=/data/output -p 9003:9003 -v /path/to/your/export/folder:/data/output ghcr.io/glissemantv/owui-file-export-server:latest
-docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e -e LOG_LEVEL=INFO -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:latest
+docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e -e LOG_LEVEL=INFO -e UNSPLASH_ACCESS_KEY=top-secret -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:latest
 
 ```
 
@@ -143,6 +146,7 @@ services:
 	  - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=INFO
+      - UNSPLASH_ACCESS_KEY=top-secret
     ports:
       - "8000:8000"
     volumes:
@@ -266,6 +270,7 @@ For OWUI-MCPO
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `/output`) path must be mounted as a volume
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
 
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
@@ -281,7 +286,7 @@ For OWUI-FILE-EXPORT-SERVER
 Here is an example of a docker run script file to run both the file export server and the MCPO server:
 ```
 docker run -d --name file-export-server --network host -e FILE_EXPORT_DIR=/data/output -p 9003:9003 -v /path/to/your/export/folder:/data/output ghcr.io/glissemantv/owui-file-export-server:dev-latest
-docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e LOG_LEVEL=DEBUG -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:dev-latest
+docker run -d --name owui-mcpo --network host -e FILE_EXPORT_BASE_URL=http://192.168.0.100:9003/files -e FILE_EXPORT_DIR=/output -e MCPO_API_KEY=top-secret -e PERSISTENT_FILES=True -e FILES_DELAY=1 -e LOG_LEVEL=DEBUG -e UNSPLASH_ACCESS_KEY=top-secret -p 8000:8000 -v /path/to/your/export/folder:/output ghcr.io/glissemantv/owui-mcpo:dev-latest
 ```
 
 Here is an example of a `docker-compose.yaml` file to run both the file export server and the MCPO server:
@@ -307,6 +312,7 @@ services:
 	  - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
+      - UNSPLASH_ACCESS_KEY=top-secret
     ports:
       - "8000:8000"
     volumes:
