@@ -414,7 +414,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
 
     log.debug("Applying image_query regex replacement...")
     md_text_before_replace = md_text
-    md_text = re.sub(r'!\[[^\]]*\]\(image_query:([^)]+)\)', replace_image_query, md_text)
+    md_text = re.sub(r'!\[[^\]]*\]\(\s*image_query:\s*([^)]+)\)', replace_image_query, md_text)
     if md_text != md_text_before_replace:
         log.debug(f"Markdown text after replacement:\n{md_text}")
     else:
