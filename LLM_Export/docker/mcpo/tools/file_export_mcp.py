@@ -647,22 +647,41 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     md_text = "\n".join(content)
                 else:
                     md_text = content
+
+                def replace_image_query(match):
+                    query = match.group(1).strip()
+                    log.info(f"Found image_query placeholder: '{query}'")
+                    image_url = search_image(query)
+                    if image_url:
+                        tag = f'<img src="{image_url}" alt="Image recherche: {query}" />'
+                        log.info(f"Replaced image_query '{query}' with {image_url}")
+                    else:
+                        tag = f'<img src="" alt="Image non trouvee pour: {query}" />'
+                        log.warning(f"No image found for '{query}'")
+                    return tag
+
+                md_text = re.sub(r'!\[[^\]]*\]\(image_query:([^)]+)\)', replace_image_query, md_text)
+                log.debug(f"Markdown after replacement for {filename}:\n{md_text}")
+
                 html = markdown2.markdown(
                     md_text,
                     extras=[
                         'fenced-code-blocks',
                         'tables',
                         'break-on-newline',
-                        'cuddled-lists', 
-                        'metadata',
+                        'cuddled-lists',
                         'smarty-pants'
                     ]
                 )
-                log.debug(f"HTML generated for {filename}:\n{html}") 
+                log.debug(f"HTML generated for {filename}:\n{html}")
+
                 soup = BeautifulSoup(html, "html.parser")
-                story = render_html_elements(soup) 
+                story = render_html_elements(soup)
+
                 if not story:
-                    story = [Paragraph("Empty content", styles["CustomNormal"])]
+                    log.warning(f"Story empty for {filename}, adding fallback text.")
+                    story = [Paragraph("Empty Content", styles["CustomNormal"])]
+
                 doc = SimpleDocTemplate(
                     filepath,
                     topMargin=72,
@@ -674,9 +693,9 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     doc.build(story)
                     log.info(f"PDF '{filename}' successfully created in the archive.")
                 except Exception as e:
-                    log.error(f"Error during PDF construction '{filename}' in archive: {e}")
-                    simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
-                    doc.build(simple_story)
+                    log.error(f"Error during PDF build for '{filename}': {e}", exc_info=True)
+                    fallback_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
+                    doc.build(fallback_story)
             elif format_type == "xlsx":
                 wb = Workbook()
                 ws = wb.active
