@@ -12,6 +12,7 @@ import logging
 import requests
 import threading
 import markdown2
+import tempfile
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
@@ -291,12 +292,50 @@ def render_html_elements(soup):
                 alt = elem.get("alt", "[Image]")
                 if src:
                     try:
-                        img = Image(src, width=200, height=150)
-                        story.append(img)
+
+                        response = requests.get(src, timeout=10) 
+                        response.raise_for_status() 
+
+
+                        parsed_url = requests.utils.urlparse(src)
+                        original_filename = os.path.basename(parsed_url.path)
+                        if not original_filename:
+                            original_filename = f"image_{uuid.uuid4().hex[:8]}.jpg" 
+
+
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(original_filename)[1] or '.jpg') as tmp_img_file:
+                            tmp_img_path = tmp_img_file.name
+                            tmp_img_file.write(response.content)
+
+                        img_width = elem.get("width")
+                        img_height = elem.get("height")
+
+                        max_width = 400 
+                        max_height = 300 
+
+
+                        img_flowable = Image(tmp_img_path, width=max_width, height=max_height, kind='proportional') 
+
+                        story.append(img_flowable)
                         story.append(Spacer(1, 10))
-                    except Exception as e:
-                        log.error(f"Error image loading {src}: {e}")
-                        story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
+
+                        try:
+                             os.unlink(tmp_img_path) 
+                        except OSError as e:
+                             log.warning(f"Could not delete temporary image file {tmp_img_path}: {e}")
+
+                    except requests.exceptions.RequestException as e:
+                        log.error(f"Error downloading image from {src}: {e}")
+                        story.append(Paragraph(f"[Image: {alt} (Download failed)]", styles["CustomNormal"]))
+                        story.append(Spacer(1, 6))
+                    except Exception as e: 
+                        log.error(f"Error processing image {src}: {e}")
+                        if 'tmp_img_path' in locals():
+                            try:
+                                os.unlink(tmp_img_path)
+                            except OSError:
+                                pass
+                        story.append(Paragraph(f"[Image: {alt} (Processing failed)]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
                     
             elif tag_name == "br":
