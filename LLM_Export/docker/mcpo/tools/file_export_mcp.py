@@ -61,7 +61,6 @@ def search_image(query):
             return data["results"][0]["urls"]["regular"]
     return None
 
-
 def _resolve_log_level(val: str | None) -> int:
     if not val:
         return logging.INFO
@@ -83,6 +82,7 @@ log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
 log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
 
 mcp = FastMCP("file_export")
+
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -239,96 +239,69 @@ def render_html_elements(soup):
         
         elif hasattr(elem, 'name'):
             tag_name = elem.name
-
             if tag_name == "h1":
                 text = render_text_with_emojis(elem.get_text().strip())
                 story.append(Paragraph(text, styles["CustomHeading1"]))
                 story.append(Spacer(1, 10))
-
+                
             elif tag_name == "h2":
                 text = render_text_with_emojis(elem.get_text().strip())
                 story.append(Paragraph(text, styles["CustomHeading2"]))
                 story.append(Spacer(1, 8))
-
+                
             elif tag_name == "h3":
                 text = render_text_with_emojis(elem.get_text().strip())
                 story.append(Paragraph(text, styles["CustomHeading3"]))
                 story.append(Spacer(1, 6))
-
+                
             elif tag_name == "p":
                 text = render_text_with_emojis(elem.get_text().strip())
                 if text:
                     story.append(Paragraph(text, styles["CustomNormal"]))
                     story.append(Spacer(1, 6))
-
+                    
             elif tag_name in ["ul", "ol"]:
                 is_ordered = tag_name == "ol"
                 items = process_list_items(elem, is_ordered)
                 if items:
-                    story.append(ListFlowable(items,
+                    list_flowable = ListFlowable(
+                        items,
                         bulletType='1' if is_ordered else 'bullet',
                         leftIndent=10 * mm,
                         bulletIndent=5 * mm,
                         spaceBefore=6,
                         spaceAfter=10
-                    ))
-
+                    )
+                    story.append(list_flowable)
+                    
             elif tag_name == "blockquote":
                 text = render_text_with_emojis(elem.get_text().strip())
                 if text:
                     story.append(Paragraph(f"{text}", styles["CustomNormal"]))
                     story.append(Spacer(1, 8))
-
+                    
             elif tag_name in ["code", "pre"]:
                 text = elem.get_text().strip()
                 if text:
                     story.append(Paragraph(text, styles["CustomCode"]))
                     story.append(Spacer(1, 6 if tag_name == "code" else 8))
-
+                    
             elif tag_name == "img":
                 src = elem.get("src")
                 alt = elem.get("alt", "[Image]")
-
                 if src:
                     try:
-                        if src.startswith("image_query:"):
-                            # cas image_query
-                            query = src.replace("image_query:", "").strip()
-                            image_url = search_image(query)
-                            if image_url:
-                                response = requests.get(image_url)
-                                response.raise_for_status()
-                                img_data = BytesIO(response.content)
-                                img = Image(img_data, width=200, height=150)
-                                story.append(img)
-                                story.append(Spacer(1, 10))
-                            else:
-                                story.append(Paragraph(f"[Image non trouvée pour: {query}]", styles["CustomNormal"]))
-                                story.append(Spacer(1, 6))
-
-                        elif src.startswith("http"):
-                            # image distante classique
-                            response = requests.get(src)
-                            response.raise_for_status()
-                            img_data = BytesIO(response.content)
-                            img = Image(img_data, width=200, height=150)
-                            story.append(img)
-                            story.append(Spacer(1, 10))
-
-                        else:
-                            # image locale
-                            img = Image(src, width=200, height=150)
-                            story.append(img)
-                            story.append(Spacer(1, 10))
-
+                        img = Image(src, width=200, height=150)
+                        story.append(img)
+                        story.append(Spacer(1, 10))
                     except Exception as e:
                         log.error(f"Error image loading {src}: {e}")
                         story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
-
+                    
             elif tag_name == "br":
                 story.append(Spacer(1, 6))
-
+                
             else:
                 text = elem.get_text().strip()
                 if text:
@@ -336,7 +309,6 @@ def render_html_elements(soup):
                     story.append(Spacer(1, 6))
     
     return story
-
 
 def _cleanup_files(folder_path: str, delay_minutes: int):
     def delete_files():
@@ -385,17 +357,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
 
     md_text = "\n".join(text)
     
-    def replace_image_query(match):
-        query = match.group(1).strip()
-        image_url = search_image(query)
-        if image_url:
-            return f'<img src="{image_url}" alt="Image recherche: {query}" />'
-        else:
-            return f'<img src="" alt="Image non trouvée pour: {query}" />'
-    
-    # Regex corrigée
-    md_text = re.sub(r'!\[[^\]]*\]\(image_query:([^)]+)\)', replace_image_query, md_text)    
-    
     html = markdown2.markdown(
         md_text,
         extras=[
@@ -436,7 +397,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         _cleanup_files(folder_path, FILES_DELAY)
 
     return {"url": _public_url(folder_path, fname)}
-
 
 @mcp.tool()
 def create_file(content: str, filename: str, persistent: bool = PERSISTENT_FILES) -> dict:
@@ -498,7 +458,7 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                 elif size == "large":
                     width = Inches(4)
                     height = Inches(3)
-                else:
+                else: 
                     width = Inches(3)
                     height = Inches(2)
                 
@@ -526,11 +486,12 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                 elif position == "bottom":
                     left = Inches(5.5)
                     top = Inches(4.5)
+
                     content_shape.left = Inches(0.5)
                     content_shape.top = Inches(0.5)
                     content_shape.width = Inches(7)
                     content_shape.height = Inches(3)
-                else:  
+                else: 
                     left = Inches(5.5)
                     top = Inches(1.5)
                     content_shape.left = Inches(0.5)
