@@ -13,12 +13,13 @@ import logging
 import requests
 import threading
 import markdown2
+import tempfile
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
 from pptx import Presentation
-from pptx.util import Inches
+from pptx.util import Inches, Pt
 from pptx.parts.image import Image
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
@@ -95,6 +96,16 @@ log.setLevel(_resolve_log_level(LOG_LEVEL_ENV))
 log.info("Effective LOG_LEVEL -> %s", logging.getLevelName(log.level))
 
 mcp = FastMCP("file_export")
+
+def dynamic_font_size(content_list, max_chars=400, base_size=28, min_size=12):
+    total_chars = sum(len(line) for line in content_list)
+    ratio = total_chars / max_chars if max_chars > 0 else 1
+    if ratio <= 1:
+        return Pt(base_size)
+    else:
+        new_size = int(base_size / ratio)
+        return Pt(max(min_size, new_size))
+
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -412,7 +423,7 @@ def create_csv(data: list[list[str]], filename: str = None, persistent: bool = P
 
 @mcp.tool()
 def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
-    log.debug("Starting create_pdf tool...")
+    log.info("Starting create_pdf tool...")
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
     md_text = "\n".join(text)
@@ -420,12 +431,12 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
 
     def replace_image_query(match):
         query = match.group(1).strip()
-        log.debug(f"Found image_query placeholder: '{query}'")
+        log.info(f"Found image_query placeholder: '{query}'")
         image_url = search_image(query)
 
         if image_url:
             result_tag = f'\n\n<img src="{image_url}" alt="Image recherche: {query}" />\n\n'
-            log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
+            log.info(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
             result_tag = f'\n\n<p>[Image non trouvee pour: {query}]</p>\n\n'
             log.warning(f"Failed to find image for query: '{query}'")
@@ -458,7 +469,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
     soup = BeautifulSoup(html, "html.parser")
     log.debug("Rendering HTML elements to ReportLab story...")
     story = render_html_elements(soup)
-    log.debug(f"Story generated with {len(story)} elements.")
+    log.info(f"Story generated with {len(story)} elements.")
     if not story:
         log.warning("Story is empty, adding 'Empty Content' paragraph.")
         story = [Paragraph("Empty Content", styles["CustomNormal"])]
@@ -477,7 +488,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         doc.build(story)
         log.info(f"PDF creation succeed: {filepath}")
     except Exception as e:
-        log.error(f"Error in PDF building: {e}", exc_info=True) 
+        log.error(f"Error in PDF building: {e}", exc_info=True) # Include traceback
         log.info("Attempting to build PDF with error message...")
         simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
         try:
@@ -488,7 +499,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
 
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
-    log.debug("create_pdf tool finished.")
+    log.info("create_pdf tool finished.")
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()
@@ -519,13 +530,36 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
     title_shape = slide.shapes.title
     title_shape.text = title
     for slide_data in slides_data:
+        if not isinstance(slide_data, dict):
+            raise ValueError("Each slide must be a dictionary.")
+
+        slide_title = slide_data.get("title", "Sans titre")
+        content_list = slide_data.get("content", [])
+        if not isinstance(content_list, list):
+            content_list = [content_list]
+
         slide_layout = prs.slide_layouts[1]
         slide = prs.slides.add_slide(slide_layout)
+
         title_shape = slide.shapes.title
-        title_shape.text = slide_data["title"]
-        content = "\n".join(slide_data["content"]) if isinstance(slide_data["content"], list) else slide_data["content"]
+        title_shape.text = slide_title
+        for paragraph in title_shape.text_frame.paragraphs:
+            for run in paragraph.runs:
+                run.font.size = Pt(28)
+                run.font.bold = True
+
         content_shape = slide.placeholders[1]
-        content_shape.text = content
+        content_shape.text = ""  
+        font_size = dynamic_font_size(content_list, max_chars=300, base_size=24, min_size=12)
+
+        for line in content_list:
+            p = content_shape.text_frame.add_paragraph()
+            run = p.add_run()
+            run.text = line
+            run.font.size = font_size
+            run.font.name = "Calibri"
+            p.space_after = Pt(6)
+        
         image_query = slide_data.get("image_query")
         if image_query:
             image_url = search_image(image_query)
@@ -548,7 +582,7 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                     top = Inches(1.5)
                     content_shape.left = Inches(4.5)
                     content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(3)
+                    content_shape.width = Inches(5)
                     content_shape.height = Inches(4)
                 elif position == "right":
                     left = Inches(5.5)
@@ -613,41 +647,22 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     md_text = "\n".join(content)
                 else:
                     md_text = content
-
-                def replace_image_query(match):
-                    query = match.group(1).strip()
-                    log.info(f"Found image_query placeholder: '{query}'")
-                    image_url = search_image(query)
-                    if image_url:
-                        tag = f'<img src="{image_url}" alt="Image recherche: {query}" />'
-                        log.info(f"Replaced image_query '{query}' with {image_url}")
-                    else:
-                        tag = f'<img src="" alt="Image non trouvee pour: {query}" />'
-                        log.warning(f"No image found for '{query}'")
-                    return tag
-
-                md_text = re.sub(r'!\[[^\]]*\]\(image_query:([^)]+)\)', replace_image_query, md_text)
-                log.debug(f"Markdown after replacement for {filename}:\n{md_text}")
-
                 html = markdown2.markdown(
                     md_text,
                     extras=[
                         'fenced-code-blocks',
                         'tables',
                         'break-on-newline',
-                        'cuddled-lists',
+                        'cuddled-lists', 
+                        'metadata',
                         'smarty-pants'
                     ]
                 )
-                log.debug(f"HTML generated for {filename}:\n{html}")
-
+                log.debug(f"HTML generated for {filename}:\n{html}") 
                 soup = BeautifulSoup(html, "html.parser")
-                story = render_html_elements(soup)
-
+                story = render_html_elements(soup) 
                 if not story:
-                    log.warning(f"Story empty for {filename}, adding fallback text.")
-                    story = [Paragraph("Empty Content", styles["CustomNormal"])]
-
+                    story = [Paragraph("Empty content", styles["CustomNormal"])]
                 doc = SimpleDocTemplate(
                     filepath,
                     topMargin=72,
@@ -659,9 +674,9 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     doc.build(story)
                     log.info(f"PDF '{filename}' successfully created in the archive.")
                 except Exception as e:
-                    log.error(f"Error during PDF build for '{filename}': {e}", exc_info=True)
-                    fallback_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
-                    doc.build(fallback_story)
+                    log.error(f"Error during PDF construction '{filename}' in archive: {e}")
+                    simple_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
+                    doc.build(simple_story)
             elif format_type == "xlsx":
                 wb = Workbook()
                 ws = wb.active
@@ -700,13 +715,28 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     content_list = slide_data.get("content", [])
                     if not isinstance(content_list, list):
                         content_list = [content_list]
+                        
                     slide_layout = prs.slide_layouts[1]
                     slide = prs.slides.add_slide(slide_layout)
+                    
                     title_shape = slide.shapes.title
                     title_shape.text = title
-                    content_text = "\n".join(content_list)
+                    for paragraph in title_shape.text_frame.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.size = Pt(28)
+                            run.font.bold = True
+                            
                     content_shape = slide.placeholders[1]
-                    content_shape.text = content_text
+                    content_shape.text = ""
+                    font_size = dynamic_font_size(content_list, max_chars=300, base_size=24, min_size=12)
+
+                    for line in content_list:
+                        p = content_shape.text_frame.add_paragraph()
+                        run = p.add_run()
+                        run.text = line
+                        run.font.size = font_size
+                        p.space_after = Pt(6)
+                        
                     image_query = slide_data.get("image_query")
                     if image_query:
                         image_url = search_image(image_query)
@@ -729,7 +759,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                                 top = Inches(1.5)
                                 content_shape.left = Inches(4.5)
                                 content_shape.top = Inches(1.5)
-                                content_shape.width = Inches(3)
+                                content_shape.width = Inches(5)
                                 content_shape.height = Inches(4)
                             elif position == "right":
                                 left = Inches(5.5)
