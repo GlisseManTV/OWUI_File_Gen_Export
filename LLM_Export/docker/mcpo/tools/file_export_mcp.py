@@ -255,11 +255,31 @@ def render_html_elements(soup):
                 story.append(Paragraph(text, styles["CustomHeading3"]))
                 story.append(Spacer(1, 6))
             elif tag_name == "p":
-                text = render_text_with_emojis(elem.get_text().strip())
-                if text:
-                    log.debug(f"Adding Paragraph: {text[:50]}...")
-                    story.append(Paragraph(text, styles["CustomNormal"]))
-                    story.append(Spacer(1, 6))
+                imgs = elem.find_all("img")
+                if imgs:
+                    for img_tag in imgs:
+                        src = img_tag.get("src")
+                        alt = img_tag.get("alt", "[Image]")
+                        try:
+                            if src and src.startswith("http"):
+                                response = requests.get(src)
+                                response.raise_for_status()
+                                img_data = BytesIO(response.content)
+                                img = Image(img_data, width=200, height=150)
+                            else:
+                                img = Image(src, width=200, height=150)
+                            story.append(img)
+                            story.append(Spacer(1, 10))
+                        except Exception as e:
+                            log.error(f"Error loading image {src}: {e}")
+                            story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
+                            story.append(Spacer(1, 6))
+                else:
+                    text = render_text_with_emojis(elem.get_text().strip())
+                    if text:
+                        log.debug(f"Adding Paragraph: {text[:50]}...")
+                        story.append(Paragraph(text, styles["CustomNormal"]))
+                        story.append(Spacer(1, 6))
             elif tag_name in ["ul", "ol"]:
                 is_ordered = tag_name == "ol"
                 log.debug(f"Processing list (ordered={is_ordered})...")
