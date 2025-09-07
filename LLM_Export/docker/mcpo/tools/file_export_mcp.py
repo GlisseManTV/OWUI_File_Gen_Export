@@ -422,13 +422,14 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         query = match.group(1).strip()
         log.info(f"Found image_query placeholder: '{query}'")
         image_url = search_image(query)
-        result_tag = ""
+
         if image_url:
-            result_tag = f'<img src="{image_url}" alt="Image recherche: {query}" />'
+            result_tag = f'\n\n<img src="{image_url}" alt="Image recherche: {query}" />\n\n'
             log.info(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
-            result_tag = f'<img src="" alt="Image non trouvee pour: {query}" />'
+            result_tag = f'\n\n<p>[Image non trouvee pour: {query}]</p>\n\n'
             log.warning(f"Failed to find image for query: '{query}'")
+
         log.debug(f"Replacement result: {result_tag}")
         return result_tag
 
