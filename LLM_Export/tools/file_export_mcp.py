@@ -69,7 +69,7 @@ def search_image(query):
             log.debug(f"Found image URL for '{query}': {image_url}")
             return image_url
         else:
-            log.info(f"No results found on Unsplash for query: '{query}'")
+            log.debug(f"No results found on Unsplash for query: '{query}'")
     except requests.exceptions.RequestException as e:
         log.error(f"Network error while searching image for '{query}': {e}")
     except json.JSONDecodeError as e:
@@ -321,16 +321,16 @@ def render_html_elements(soup):
             elif tag_name == "img":
                 src = elem.get("src")
                 alt = elem.get("alt", "[Image]")
-                log.info(f"Found <img> tag. src='{src}', alt='{alt}'")
+                log.debug(f"Found <img> tag. src='{src}', alt='{alt}'")
                 if src is not None: 
                     try:
                         if src.startswith("image_query:"):
 
                             query = src.replace("image_query:", "").strip()
-                            log.info(f"Handling image_query: '{query}'")
+                            log.debug(f"Handling image_query: '{query}'")
                             image_url = search_image(query)
                             if image_url:
-                                log.info(f"Downloading image from Unsplash URL: {image_url}")
+                                log.debug(f"Downloading image from Unsplash URL: {image_url}")
                                 response = requests.get(image_url)
                                 log.debug(f"Image download response status: {response.status_code}")
                                 response.raise_for_status()
@@ -344,7 +344,7 @@ def render_html_elements(soup):
                                 story.append(Paragraph(f"[Image non trouvee pour: {query}]", styles["CustomNormal"]))
                                 story.append(Spacer(1, 6))
                         elif src.startswith("http"):
-                            log.info(f"Downloading image from direct URL: {src}")
+                            log.debug(f"Downloading image from direct URL: {src}")
                             response = requests.get(src)
                             log.debug(f"Image download response status: {response.status_code}")
                             response.raise_for_status()
@@ -354,7 +354,7 @@ def render_html_elements(soup):
                             story.append(img)
                             story.append(Spacer(1, 10))
                         else:
-                            log.info(f"Loading local image: {src}")
+                            log.debug(f"Loading local image: {src}")
                             if os.path.exists(src):
                                 img = ReportLabImage(src, width=200, height=150)
                                 log.debug("Adding ReportLab Image object to story (Local)")
@@ -394,7 +394,7 @@ def _cleanup_files(folder_path: str, delay_minutes: int):
         try:
             import shutil
             shutil.rmtree(folder_path) 
-            log.info(f"Folder {folder_path} deleted.")
+            log.debug(f"Folder {folder_path} deleted.")
         except Exception as e:
             logging.error(f"Error deleting files : {e}")
     thread = threading.Thread(target=delete_files)
@@ -425,7 +425,7 @@ def create_csv(data: list[list[str]], filename: str = None, persistent: bool = P
 
 @mcp.tool()
 def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
-    log.info("Starting create_pdf tool...")
+    log.debug("Starting create_pdf tool...")
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pdf", filename)
     md_text = "\n".join(text)
@@ -433,14 +433,14 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
 
     def replace_image_query(match):
         query = match.group(1).strip()
-        log.info(f"Found image_query placeholder: '{query}'")
+        log.debug(f"Found image_query placeholder: '{query}'")
         image_url = search_image(query)
 
         if image_url:
-            result_tag = f'\n\n<img src="{image_url}" alt="Image recherche: {query}" />\n\n'
-            log.info(f"Replaced image_query '{query}' with URL: {image_url}")
+            result_tag = f'\n\n<img src="{image_url}" alt="Image search: {query}" />\n\n'
+            log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
-            result_tag = f'\n\n<p>[Image non trouvee pour: {query}]</p>\n\n'
+            result_tag = f'\n\n<p>[Image not found for: {query}]</p>\n\n'
             log.warning(f"Failed to find image for query: '{query}'")
 
         log.debug(f"Replacement result: {result_tag}")
@@ -471,7 +471,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
     soup = BeautifulSoup(html, "html.parser")
     log.debug("Rendering HTML elements to ReportLab story...")
     story = render_html_elements(soup)
-    log.info(f"Story generated with {len(story)} elements.")
+    log.debug(f"Story generated with {len(story)} elements.")
     if not story:
         log.warning("Story is empty, adding 'Empty Content' paragraph.")
         story = [Paragraph("Empty Content", styles["CustomNormal"])]
@@ -485,23 +485,23 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         rightMargin=72
     )
     try:
-        log.info("Attempting to build PDF document...")
+        log.debug("Attempting to build PDF document...")
         log.debug(f"Calling doc.build with story containing {len(story)} elements.")
         doc.build(story)
-        log.info(f"PDF creation succeed: {filepath}")
+        log.debug(f"PDF creation succeed: {filepath}")
     except Exception as e:
-        log.error(f"Error in PDF building: {e}", exc_info=True) # Include traceback
-        log.info("Attempting to build PDF with error message...")
+        log.error(f"Error in PDF building: {e}", exc_info=True) 
+        log.debug("Attempting to build PDF with error message...")
         simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
         try:
             doc.build(simple_story)
-            log.info("Error PDF created successfully.")
+            log.debug("Error PDF created successfully.")
         except Exception as e2:
             log.error(f"Failed to create even the error PDF: {e2}", exc_info=True)
 
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
-    log.info("create_pdf tool finished.")
+    log.debug("create_pdf tool finished.")
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()
@@ -535,7 +535,7 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
         if not isinstance(slide_data, dict):
             raise ValueError("Each slide must be a dictionary.")
 
-        slide_title = slide_data.get("title", "Sans titre")
+        slide_title = slide_data.get("title", "Untitled")
         content_list = slide_data.get("content", [])
         if not isinstance(content_list, list):
             content_list = [content_list]
@@ -652,13 +652,13 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
 
                 def replace_image_query(match):
                     query = match.group(1).strip()
-                    log.info(f"Found image_query placeholder: '{query}'")
+                    log.debug(f"Found image_query placeholder: '{query}'")
                     image_url = search_image(query)
                     if image_url:
-                        tag = f'<img src="{image_url}" alt="Image recherche: {query}" />'
-                        log.info(f"Replaced image_query '{query}' with {image_url}")
+                        tag = f'<img src="{image_url}" alt="Image search: {query}" />'
+                        log.debug(f"Replaced image_query '{query}' with {image_url}")
                     else:
-                        tag = f'<img src="" alt="Image non trouvee pour: {query}" />'
+                        tag = f'<img src="" alt="Image not found for: {query}" />'
                         log.warning(f"No image found for '{query}'")
                     return tag
 
@@ -693,7 +693,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 )
                 try:
                     doc.build(story)
-                    log.info(f"PDF '{filename}' successfully created in the archive.")
+                    log.debug(f"PDF '{filename}' successfully created in the archive.")
                 except Exception as e:
                     log.error(f"Error during PDF build for '{filename}': {e}", exc_info=True)
                     fallback_story = [Paragraph("Error generating PDF", styles["CustomNormal"])]
@@ -732,7 +732,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                 for slide_data in parsed_content:
                     if not isinstance(slide_data, dict):
                         raise ValueError("Each slide must be a dictionary.")
-                    title = slide_data.get("title", "Sans titre")
+                    title = slide_data.get("title", "Untitled")
                     content_list = slide_data.get("content", [])
                     if not isinstance(content_list, list):
                         content_list = [content_list]

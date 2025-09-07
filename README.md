@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `PYTHONPATH\output`)
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is false)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
-   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
 
 3. Install dependencies:
    ```bash
@@ -76,7 +76,7 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 				"FILE_EXPORT_DIR": "C:\\temp\\LLM_Export\\output", <==== HERE set the directory where files will be saved (must match the server's export directory)
 				"PERSISTENT_FILES": "false", <==== HERE set to true to keep files after download, false to delete after delay
 				"FILES_DELAY": "60" <==== HERE set the delay in minut to wait before checking for new files
-                "UNSPLASH_ACCESS_KEY": <== Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
+                "UNSPLASH_ACCESS_KEY": <== Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
 			},
 			"disabled": false,
 			"autoApprove": []
@@ -104,7 +104,7 @@ For OWUI-MCPO
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `/output`) path must be mounted as a volume
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
-   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
 
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
@@ -270,7 +270,7 @@ For OWUI-MCPO
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the server's export directory) (default is `/output`) path must be mounted as a volume
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
-   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see https://unsplash.com/documentation#creating-a-developer-account
+   - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
 
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
