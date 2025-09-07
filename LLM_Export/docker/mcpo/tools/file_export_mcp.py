@@ -1,4 +1,3 @@
-import re
 import os
 import ast
 import json
@@ -21,22 +20,28 @@ from pptx import Presentation
 from pptx.util import Inches
 from pptx.parts.image import Image
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image as ReportLabImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.units import mm
+
 PERSISTENT_FILES = os.getenv("PERSISTENT_FILES", "false")
 FILES_DELAY = int(os.getenv("FILES_DELAY", 60)) 
+
 EXPORT_DIR_ENV = os.getenv("FILE_EXPORT_DIR")
-EXPORT_DIR = (EXPORT_DIR_ENV or os.path.join(DEFAULT_PATH_ENV, "output")).rstrip("/")
+EXPORT_DIR = (EXPORT_DIR_ENV or r"/output").rstrip("/")
 os.makedirs(EXPORT_DIR, exist_ok=True)
+
+
 BASE_URL_ENV = os.getenv("FILE_EXPORT_BASE_URL")
 BASE_URL = (BASE_URL_ENV or "http://localhost:9003/files").rstrip("/")
-LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")
+
+LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")  # e.g., DEBUG, INFO, WARNING, 10, etc.
 LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
+
 def search_image(query):
     api_key = os.getenv("UNSPLASH_ACCESS_KEY")
     if not api_key:
@@ -53,7 +58,7 @@ def search_image(query):
     try:
         response = requests.get(url, params=params, headers=headers)
         log.debug(f"Unsplash API response status: {response.status_code}")
-        response.raise_for_status()
+        response.raise_for_status() # Raise an exception for bad status codes
         data = response.json()
         if data.get("results"):
             image_url = data["results"][0]["urls"]["regular"]
@@ -286,6 +291,7 @@ def render_html_elements(soup):
                 if src is not None: # Allow empty string src for error cases
                     try:
                         if src.startswith("image_query:"):
+                            # cas image_query
                             query = src.replace("image_query:", "").strip()
                             log.info(f"Handling image_query: '{query}'")
                             image_url = search_image(query)
@@ -304,6 +310,7 @@ def render_html_elements(soup):
                                 story.append(Paragraph(f"[Image non trouvée pour: {query}]", styles["CustomNormal"]))
                                 story.append(Spacer(1, 6))
                         elif src.startswith("http"):
+                            # image distante classique
                             log.info(f"Downloading image from direct URL: {src}")
                             response = requests.get(src)
                             log.debug(f"Image download response status: {response.status_code}")
@@ -314,6 +321,7 @@ def render_html_elements(soup):
                             story.append(img)
                             story.append(Spacer(1, 10))
                         else:
+                            # image locale
                             log.info(f"Loading local image: {src}")
                             if os.path.exists(src):
                                 img = ReportLabImage(src, width=200, height=150)
@@ -329,7 +337,7 @@ def render_html_elements(soup):
                         story.append(Paragraph(f"[Image (erreur réseau): {alt}]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
                     except Exception as e:
-                        log.error(f"Error processing image {src}: {e}", exc_info=True) 
+                        log.error(f"Error processing image {src}: {e}", exc_info=True) # exc_info=True for full traceback
                         story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
                 else:
@@ -451,7 +459,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         doc.build(story)
         log.info(f"PDF creation succeed: {filepath}")
     except Exception as e:
-        log.error(f"Error in PDF building: {e}", exc_info=True) 
+        log.error(f"Error in PDF building: {e}", exc_info=True) # Include traceback
         log.info("Attempting to build PDF with error message...")
         simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
         try:
