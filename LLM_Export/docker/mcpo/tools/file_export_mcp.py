@@ -449,7 +449,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             'tables',
             'break-on-newline',
             'cuddled-lists', 
-            'metadata',
             'smarty-pants'
         ]
     )
