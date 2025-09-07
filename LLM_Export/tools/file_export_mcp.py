@@ -9,6 +9,7 @@ import tarfile
 import zipfile
 import py7zr
 import logging
+import requests
 import threading
 import markdown2
 from bs4 import BeautifulSoup, NavigableString
@@ -17,6 +18,8 @@ from openpyxl import Workbook
 import csv
 from pptx import Presentation
 from pptx.util import Inches
+from pptx.parts.image import Image
+from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -39,6 +42,25 @@ LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")
 LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
+
+def search_image(query):
+    api_key = os.getenv("UNSPLASH_ACCESS_KEY")
+    if not api_key:
+        return None
+    
+    url = "https://api.unsplash.com/search/photos"
+    params = {
+        "query": query,
+        "per_page": 1,
+        "orientation": "landscape"
+    }
+    headers = {"Authorization": f"Client-ID {api_key}"}
+    response = requests.get(url, params=params, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("results"):
+            return data["results"][0]["urls"]["regular"]
+    return None
 
 def _resolve_log_level(val: str | None) -> int:
     if not val:
@@ -419,6 +441,70 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
         content = "\n".join(slide_data["content"]) if isinstance(slide_data["content"], list) else slide_data["content"]
         content_shape = slide.placeholders[1]
         content_shape.text = content
+        
+        image_query = slide_data.get("image_query")
+        if image_query:
+            image_url = search_image(image_query)
+            if image_url:
+                image_data = requests.get(image_url).content
+                image_stream = BytesIO(image_data)
+                
+                position = slide_data.get("image_position", "right")
+                size = slide_data.get("image_size", "medium")
+                
+                if size == "small":
+                    width = Inches(2)
+                    height = Inches(1.5)
+                elif size == "large":
+                    width = Inches(4)
+                    height = Inches(3)
+                else: 
+                    width = Inches(3)
+                    height = Inches(2)
+                
+                if position == "left":
+                    left = Inches(0.5)
+                    top = Inches(1.5)
+                    content_shape.left = Inches(4.5)
+                    content_shape.top = Inches(1.5)
+                    content_shape.width = Inches(3)
+                    content_shape.height = Inches(4)
+                elif position == "right":
+                    left = Inches(5.5)
+                    top = Inches(1.5)
+                    content_shape.left = Inches(0.5)
+                    content_shape.top = Inches(1.5)
+                    content_shape.width = Inches(5)
+                    content_shape.height = Inches(4)
+                elif position == "top":
+                    left = Inches(5.5)
+                    top = Inches(0.5)
+                    content_shape.left = Inches(0.5)
+                    content_shape.top = Inches(2.5)
+                    content_shape.width = Inches(7)
+                    content_shape.height = Inches(3)
+                elif position == "bottom":
+                    left = Inches(5.5)
+                    top = Inches(4.5)
+
+                    content_shape.left = Inches(0.5)
+                    content_shape.top = Inches(0.5)
+                    content_shape.width = Inches(7)
+                    content_shape.height = Inches(3)
+                else: 
+                    left = Inches(5.5)
+                    top = Inches(1.5)
+                    content_shape.left = Inches(0.5)
+                    content_shape.top = Inches(1.5)
+                    content_shape.width = Inches(5)
+                    content_shape.height = Inches(4)
+                
+                slide.shapes.add_picture(image_stream, left, top, width, height)
+        else:
+            content_shape.left = Inches(0.5)
+            content_shape.top = Inches(1.5)
+            content_shape.width = Inches(7)
+            content_shape.height = Inches(4)
 
     prs.save(filepath)
 
@@ -526,7 +612,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     if not isinstance(slide_data, dict):
                         raise ValueError("Each slide must be a dictionary.")
                     
-                    title = slide_data.get("title", "Untitled")
+                    title = slide_data.get("title", "Sans titre")
                     content_list = slide_data.get("content", [])
                     
                     if not isinstance(content_list, list):
@@ -540,6 +626,69 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     content_text = "\n".join(content_list)
                     content_shape = slide.placeholders[1]
                     content_shape.text = content_text
+                    
+                    image_query = slide_data.get("image_query")
+                    if image_query:
+                        image_url = search_image(image_query)
+                        if image_url:
+                            image_data = requests.get(image_url).content
+                            image_stream = BytesIO(image_data)
+                            
+                            position = slide_data.get("image_position", "right")
+                            size = slide_data.get("image_size", "medium")
+                            
+                            if size == "small":
+                                width = Inches(2)
+                                height = Inches(1.5)
+                            elif size == "large":
+                                width = Inches(4)
+                                height = Inches(3)
+                            else:
+                                width = Inches(3)
+                                height = Inches(2)
+                            
+                            if position == "left":
+                                left = Inches(0.5)
+                                top = Inches(1.5)
+                                content_shape.left = Inches(4.5)
+                                content_shape.top = Inches(1.5)
+                                content_shape.width = Inches(3)
+                                content_shape.height = Inches(4)
+                            elif position == "right":
+                                left = Inches(5.5)
+                                top = Inches(1.5)
+                                content_shape.left = Inches(0.5)
+                                content_shape.top = Inches(1.5)
+                                content_shape.width = Inches(5)
+                                content_shape.height = Inches(4)
+                            elif position == "top":
+                                left = Inches(5.5)
+                                top = Inches(0.5)
+                                content_shape.left = Inches(0.5)
+                                content_shape.top = Inches(2.5)
+                                content_shape.width = Inches(7)
+                                content_shape.height = Inches(3)
+                            elif position == "bottom":
+                                left = Inches(5.5)
+                                top = Inches(4.5)
+                                content_shape.left = Inches(0.5)
+                                content_shape.top = Inches(0.5)
+                                content_shape.width = Inches(7)
+                                content_shape.height = Inches(3)
+                            else:
+                                left = Inches(5.5)
+                                top = Inches(1.5)
+                                content_shape.left = Inches(0.5)
+                                content_shape.top = Inches(1.5)
+                                content_shape.width = Inches(5)
+                                content_shape.height = Inches(4)
+                            
+                            slide.shapes.add_picture(image_stream, left, top, width, height)
+                    else:
+                        content_shape.left = Inches(0.5)
+                        content_shape.top = Inches(1.5)
+                        content_shape.width = Inches(7)
+                        content_shape.height = Inches(4)
 
                 prs.save(filepath)
             else:
