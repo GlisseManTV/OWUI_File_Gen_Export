@@ -676,15 +676,18 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                     else:
                         csv.writer(f).writerow([content])
             elif format_type == "pptx":
-                if isinstance(content, str):
+                parsed_content = file_info.get("slides_data", content)
+                if isinstance(parsed_content, str):
                     try:
-                        parsed_content = ast.literal_eval(content)
+                        parsed_content = ast.literal_eval(parsed_content)
                         if not isinstance(parsed_content, list):
                             raise ValueError("Parsed content is not a list")
                     except (ValueError, SyntaxError):
-                        raise ValueError(f"Invalid format for pptx content: expected list of dicts, got '{type(content).__name__}'")
-                else:
-                    parsed_content = content
+                        raise ValueError(
+                            f"Invalid format for pptx content: expected list of dicts, got '{type(parsed_content).__name__}'"
+                        )
+                elif not isinstance(parsed_content, list):
+                    raise ValueError(f"Invalid format for pptx content: expected list, got '{type(parsed_content).__name__}'")
                 prs = Presentation()
                 title_slide_layout = prs.slide_layouts[0]
                 slide = prs.slides.add_slide(title_slide_layout)
