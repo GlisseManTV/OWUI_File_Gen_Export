@@ -1,5 +1,7 @@
 ﻿# In this section, you'll find various prompt examples for different tasks.
 
+## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Best_Practices.md)
+
 ## Model Prompt
 
 I got good results with the following prompt:

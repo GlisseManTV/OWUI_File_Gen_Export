@@ -25,6 +25,9 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
 
 # 🚀 Quick Start
 
+## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Best_Practices.md)
+## Prompt examples here: [Prompt_Examples.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Prompt_Examples.md)
+
 ### 🔧 For Python Users
 
 1. Clone the repo:
