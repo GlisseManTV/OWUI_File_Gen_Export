@@ -146,7 +146,7 @@ services:
       - FILE_EXPORT_BASE_URL=http://file-export-server:9003/files
       - FILE_EXPORT_DIR=/output
       - MCPO_API_KEY=top-secret
-	  - PERSISTENT_FILES=true
+      - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=INFO
       - UNSPLASH_ACCESS_KEY=top-secret
@@ -313,7 +313,7 @@ services:
       - FILE_EXPORT_BASE_URL=http://file-export-server:9003/files
       - FILE_EXPORT_DIR=/output
       - MCPO_API_KEY=top-secret
-	  - PERSISTENT_FILES=true
+      - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
       - UNSPLASH_ACCESS_KEY=top-secret
