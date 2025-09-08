@@ -1,6 +1,6 @@
 # OWUI_File_Gen_Export – Export Files Directly from Open WebUI
 
-A lightweight, MCPO-integrated tool that lets you **generate and export real files** (PDF, Excel, ZIP, etc.) directly from Open WebUI — just like ChatGPT or Claude.
+A lightweight, MCPO-integrated tool that lets you **generate and export real files** (PDF, Excel, PowerPoint, ZIP, etc.) directly from Open WebUI — just like ChatGPT or Claude.
 
 ✅ Supports both **Python** and **Docker**  
 ✅ Fully configurable  
@@ -161,6 +161,7 @@ services:
 - ✅ `.xlsx` (Excel)
 - ✅ `.pdf` (PDF)
 - ✅ `.csv` (CSV)
+- ✅ `.pptx` (PowerPoint)
 - ✅ `.zip`n `tar.gz` and `.7z` (Archives)
 - ✅ Any other file type 
 
