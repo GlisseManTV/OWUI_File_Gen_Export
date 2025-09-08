@@ -8,3 +8,5 @@ python-multipart
 markdown2
 beautifulsoup4
 emoji
+python-pptx
+requests

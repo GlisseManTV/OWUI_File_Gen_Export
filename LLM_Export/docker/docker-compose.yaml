@@ -20,6 +20,7 @@ services:
       - PERSISTENT_FILES=true
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
+      - UNSPLASH_ACCESS_KEY=your-unsplash-access-key
     ports:
       - "8000:8000"
     volumes:

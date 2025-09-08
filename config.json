@@ -10,8 +10,11 @@
 				"PYTHONPATH": "C:\\temp\\LLM_Export",
 				"FILE_EXPORT_BASE_URL": "http://localhost:9003/files",
 				"FILE_EXPORT_DIR": "C:\\temp\\LLM_Export\\output",
+        "MCPO_API_KEY": "top-secret",
 				"PERSISTENT_FILES": "true",
-				"FILES_DELAY": "1"
+				"FILES_DELAY": "1",
+        "LOG_LEVEL": "DEBUG",
+        "UNSPLASH_ACCESS_KEY": "top-secret"
 			},
 			"disabled": false,
 			"autoApprove": []
