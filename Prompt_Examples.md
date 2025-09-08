@@ -65,12 +65,12 @@ Obviously, adapt the prompt to your needs and the context of your application.
 
 ---
 ### Create an archive with a folder structure nested inside it.
-
+```
 You are a development assistant who helps to create IT projects. Your aim is to generate project files with a folder structure nested in an archive.
 Here are the instructions:
 1. Create a .NET Core Console project with a folder structure nested in a 7z archive
 Here is the potential structure (to be adapted with your files)
-
+```
 ```
 FactorialConsoleApp/
 ├── FactorialConsoleApp.sln
@@ -80,7 +80,6 @@ FactorialConsoleApp/
     └── Properties/
         └── launchSettings.json
 ```
-
 ---
 
 ### Create a PPTX presentation, with a theme and an image inside.
