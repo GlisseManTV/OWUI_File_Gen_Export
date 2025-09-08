@@ -1,4 +1,4 @@
-# OWUI_File_Gen_Export – Export Files Directly from Open WebUI
+# MCPO-File-Generation-Tool – Export Files Directly from Open WebUI
 
 A lightweight, MCPO-integrated tool that lets you **generate and export real files** (PDF, Excel, PowerPoint, ZIP, etc.) directly from Open WebUI — just like ChatGPT or Claude.
 
@@ -25,14 +25,14 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
 
 # 🚀 Quick Start
 
-## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Best_Practices.md)
-## Prompt examples here: [Prompt_Examples.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Prompt_Examples.md)
+## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/MCPO-File-Generation-Tool/blob/master/Best_Practices.md)
+## Prompt examples here: [Prompt_Examples.md](https://github.com/GlisseManTV/MCPO-File-Generation-Tool/blob/master/Prompt_Examples.md)
 
 ### 🔧 For Python Users
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/GlisseManTV/OWUI_File_Gen_Export.git
+   git clone https://github.com/GlisseManTV/MCPO-File-Generation-Tool.git
    ```
 
 2. Update env variables in `config.json`:
@@ -173,7 +173,7 @@ services:
 ## 📂 Project Structure
 
 ```
-OWUI_File_Gen_Export/
+MCPO-File-Generation-Tool/
 ├── LLM_Export/
 │   ├── tools/
 │   │   ├── file_export_server.py
