@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 /LLM_Export/docker/File_Server.txt
 /LLM_Export/docker/mcp_Server.txt
+/ion = ($versionInfo  ConvertFrom-Json).MajorMinorPatch
+/ion = v
+/_oldGitVersion.yml
