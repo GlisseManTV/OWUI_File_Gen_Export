@@ -14,6 +14,9 @@ import requests
 import threading
 import markdown2
 import tempfile
+from docx import Document
+from docx.shared import Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
@@ -623,6 +626,78 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
     prs.save(filepath)
     if not persistent:
         _cleanup_files(folder_path, FILES_DELAY)
+    return {"url": _public_url(folder_path, fname)}
+
+@mcp.tool()
+def create_word(content: list[dict], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
+    folder_path = _generate_unique_folder()
+    filepath, fname = _generate_filename(folder_path, "docx", filename)
+    doc = Document()
+    #missing logs
+    for item in content:
+        if isinstance(item, str):
+            doc.add_paragraph(item)
+        elif isinstance(item, dict):
+            if item.get("type") == "image_query":
+                new_item = {
+                    "type": "image",
+                    "query": item.get("query")
+                }
+                image_query = new_item.get("query")
+                if image_query:
+                    image_url = search_image(image_query)
+                    if image_url:
+                        response = requests.get(image_url)
+                        image_data = BytesIO(response.content)
+                        doc.add_picture(image_data, width=Inches(6))
+                    else:
+                        doc.add_paragraph(f"[Image not found for : {image_query}]")
+            elif "type" in item:
+                item_type = item.get("type")
+                if item_type == "title":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 1']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                elif item_type == "subtitle":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 2']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                elif item_type == "paragraph":
+                    doc.add_paragraph(item.get("text", ""))
+                elif item_type == "list":
+                    items = item.get("items", [])
+                    for i, item_text in enumerate(items):
+                        if i == 0:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                        else:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                elif item_type == "image":
+                    image_query = item.get("query")
+                    if image_query:
+                        image_url = search_image(image_query)
+                        if image_url:
+                            response = requests.get(image_url)
+                            image_data = BytesIO(response.content)
+                            doc.add_picture(image_data, width=Inches(6))
+                        else:
+                            doc.add_paragraph(f"[Image not found for : {image_query}]")
+                elif item_type == "table":
+                    data = item.get("data", [])
+                    if data:
+                        table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                        for i, row in enumerate(data):
+                            for j, cell in enumerate(row):
+                                table.cell(i, j).text = str(cell)
+            elif "text" in item:
+                doc.add_paragraph(item["text"])
+    
+    doc.save(filepath)
+    
+    if not persistent:
+        _cleanup_files(folder_path, FILES_DELAY)
+    
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()

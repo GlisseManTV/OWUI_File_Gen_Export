@@ -165,6 +165,7 @@ services:
 - ✅ `.pdf` (PDF)
 - ✅ `.csv` (CSV)
 - ✅ `.pptx` (PowerPoint)
+- ✅ `.docx` (Word)
 - ✅ `.zip`n `tar.gz` and `.7z` (Archives)
 - ✅ Any other file type 
 
