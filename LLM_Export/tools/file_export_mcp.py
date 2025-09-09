@@ -443,7 +443,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             result_tag = f'\n\n<img src="{image_url}" alt="Image search: {query}" />\n\n'
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
-            result_tag = f'\n\n<p>[Image not found for: {query}]</p>\n\n'
             log.warning(f"Failed to find image for query: '{query}'")
 
         log.debug(f"Replacement result: {result_tag}")
@@ -651,7 +650,7 @@ def create_word(content: list[dict], filename: str = None, persistent: bool = PE
                         image_data = BytesIO(response.content)
                         doc.add_picture(image_data, width=Inches(6))
                     else:
-                        doc.add_paragraph(f"[Image not found for : {image_query}]")
+
             elif "type" in item:
                 item_type = item.get("type")
                 if item_type == "title":
@@ -682,7 +681,7 @@ def create_word(content: list[dict], filename: str = None, persistent: bool = PE
                             image_data = BytesIO(response.content)
                             doc.add_picture(image_data, width=Inches(6))
                         else:
-                            doc.add_paragraph(f"[Image not found for : {image_query}]")
+                            log.warning(f"Failed to find image for query: '{query}'")
                 elif item_type == "table":
                     data = item.get("data", [])
                     if data:
@@ -733,7 +732,6 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         tag = f'<img src="{image_url}" alt="Image search: {query}" />'
                         log.debug(f"Replaced image_query '{query}' with {image_url}")
                     else:
-                        tag = f'<img src="" alt="Image not found for: {query}" />'
                         log.warning(f"No image found for '{query}'")
                     return tag
 
