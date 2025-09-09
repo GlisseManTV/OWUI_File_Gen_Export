@@ -966,7 +966,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                                             doc.add_picture(image_data, width=Inches(6))
                                             log.debug("Image successfully added")
                                         else:
-                                            log.warning(f"Recherche d'image échouée pour : '{image_query}'")
+                                            log.warning(f"Failed image search for : '{image_query}'")
                                 elif item_type == "table":
                                     data = item.get("data", [])
                                     if data:
