@@ -443,6 +443,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             result_tag = f'\n\n<img src="{image_url}" alt="Image search: {query}" />\n\n'
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
+            result_tag = ""
             log.warning(f"Failed to find image for query: '{query}'")
 
         log.debug(f"Replacement result: {result_tag}")
@@ -748,6 +749,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         tag = f'<img src="{image_url}" alt="Image search: {query}" />'
                         log.debug(f"Replaced image_query '{query}' with {image_url}")
                     else:
+                        result_tag = ""
                         log.warning(f"No image found for '{query}'")
                     return tag
 
