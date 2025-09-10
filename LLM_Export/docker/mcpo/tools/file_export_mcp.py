@@ -79,7 +79,7 @@ def search_local_sd(query):
     }
 
     try:
-        response = requests.post(f"{sd_url}/generate", json=payload, headers=headers)
+        response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
         image_url = data.get("image_url")
