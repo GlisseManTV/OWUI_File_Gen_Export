@@ -66,7 +66,7 @@ def search_local_sd(query):
     api_key = os.getenv("LOCAL_SD_API_KEY")
 
     if not sd_url:
-        log.warning("LOCAL_SD_URL n’est pas définie.")
+        log.warning("LOCAL_SD_URL is not defined.")
         return None
 
     headers = {}
@@ -87,7 +87,7 @@ def search_local_sd(query):
 
         images = data.get("images", [])
         if not images:
-            log.warning(f"Aucune image générée pour la requête : '{query}'")
+            log.warning(f"No image generated for the request : '{query}'")
             return None
 
         image_b64 = images[0]
@@ -102,7 +102,7 @@ def search_local_sd(query):
         # return f"http://localhost:8000/images/{query.replace(' ', '_')}.png"
 
     except Exception as e:
-        log.error(f"Erreur lors de la génération locale pour '{query}': {e}")
+        log.error(f"Error during local generation for '{query}': {e}")
     return None
 
 def search_unsplash(query):
