@@ -94,15 +94,15 @@ def search_local_sd(query):
 
         image_b64 = images[0]
         image_data = base64.b64decode(image_b64)
-        image_path = f"./generated_images/{query.replace(' ', '_')}.png"
-        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        folder_path = _generate_unique_folder()
+        filename = f"{query.replace(' ', '_')}.png"
+        filepath = os.path.join(folder_path, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-        with open(image_path, "wb") as f:
+        with open(filepath, "wb") as f:
             f.write(image_data)
-        return image_path
 
-        # Try for future to expose an URL to download the image directly
-        # return f"http://localhost:8000/images/{query.replace(' ', '_')}.png"
+        return _public_url(folder_path, filename)
 
     except Exception as e:
         log.error(f"Error during local generation for '{query}': {e}")
