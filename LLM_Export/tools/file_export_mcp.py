@@ -66,7 +66,7 @@ def search_local_sd(query):
     api_key = os.getenv("LOCAL_SD_API_KEY")
 
     if not sd_url:
-        log.warning("LOCAL_SD_URL is not defined.")
+        log.warning("LOCAL_SD_URL n’est pas définie.")
         return None
 
     headers = {}
@@ -84,11 +84,25 @@ def search_local_sd(query):
         response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-        image_url = data.get("image_url")
-        log.debug(f"URL of the locally generated image : {image_url}")
-        return image_url
+
+        images = data.get("images", [])
+        if not images:
+            log.warning(f"Aucune image générée pour la requête : '{query}'")
+            return None
+
+        image_b64 = images[0]
+        image_data = base64.b64decode(image_b64)
+        image_path = f"./generated_images/{query.replace(' ', '_')}.png"
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+
+        # Try for future to expose an URL to download the image directly
+        # return f"http://localhost:8000/images/{query.replace(' ', '_')}.png"
+
     except Exception as e:
-        log.error(f"Error during local generation for '{query}': {e}")
+        log.error(f"Erreur lors de la génération locale pour '{query}': {e}")
     return None
 
 def search_unsplash(query):
