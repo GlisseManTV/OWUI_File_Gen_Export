@@ -98,6 +98,8 @@ def search_local_sd(query):
         with open(image_path, "wb") as f:
             f.write(image_data)
 
+        return image_path
+
         # Try for future to expose an URL to download the image directly
         # return f"http://localhost:8000/images/{query.replace(' ', '_')}.png"
 
