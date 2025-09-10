@@ -44,6 +44,9 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is false)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
    - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
+   - `IMAGE_SOURCE`: "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance (default is "unsplash")
+   - `LOCAL_SD_URL`: URL of your local Stable Diffusion instance (if using local_sd) (no default value, mandatory if local_sd is used above)
+   - `LOCAL_SD_API_KEY`: API key of your local Stable Diffusion instance (if any) (no default value, not mandatory)
 
 3. Install dependencies:
    ```bash
@@ -78,8 +81,11 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 				"FILE_EXPORT_BASE_URL": "http://localhost:9003/files", <==== HERE set the URL of your file export server
 				"FILE_EXPORT_DIR": "C:\\temp\\LLM_Export\\output", <==== HERE set the directory where files will be saved (must match the server's export directory)
 				"PERSISTENT_FILES": "false", <==== HERE set to true to keep files after download, false to delete after delay
-				"FILES_DELAY": "60" <==== HERE set the delay in minut to wait before checking for new files
-                "UNSPLASH_ACCESS_KEY": <== Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
+				"FILES_DELAY": "60", <==== HERE set the delay in minut to wait before checking for new files
+                "UNSPLASH_ACCESS_KEY":"", <== Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
+				"IMAGE_SOURCE": "local_sd", <==== HERE set to "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance>
+				"LOCAL_SD_URL": "http://localhost:6000", <==== HERE set to the URL of your local Stable Diffusion instance>
+				"LOCAL_SD_API_KEY": "secret_key" <==== HERE set to the API key of your local Stable Diffusion instance (if any)
 			},
 			"disabled": false,
 			"autoApprove": []
@@ -150,6 +156,9 @@ services:
       - FILES_DELAY=1
       - LOG_LEVEL=INFO
       - UNSPLASH_ACCESS_KEY=top-secret
+      - IMAGE_SOURCE=local_sd
+      - LOCAL_SD_URL=http://localhost:6000
+      - LOCAL_SD_API_KEY=secret_key
     ports:
       - "8000:8000"
     volumes:
@@ -318,6 +327,9 @@ services:
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
       - UNSPLASH_ACCESS_KEY=top-secret
+      - IMAGE_SOURCE=local_sd
+      - LOCAL_SD_URL=http://localhost:6000
+      - LOCAL_SD_API_KEY=secret_key
     ports:
       - "8000:8000"
     volumes:

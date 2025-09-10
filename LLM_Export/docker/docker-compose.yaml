@@ -21,6 +21,9 @@ services:
       - FILES_DELAY=1
       - LOG_LEVEL=DEBUG
       - UNSPLASH_ACCESS_KEY=your-unsplash-access-key
+      - IMAGE_SOURCE=local_sd
+      - LOCAL_SD_URL=http://localhost:6000
+      - LOCAL_SD_API_KEY=secret_key
     ports:
       - "8000:8000"
     volumes:

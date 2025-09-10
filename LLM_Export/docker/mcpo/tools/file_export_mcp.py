@@ -48,6 +48,48 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 def search_image(query):
+    image_source = os.getenv("IMAGE_SOURCE", "unsplash")
+
+    if image_source == "unsplash":
+        return search_unsplash(query)
+    elif image_source == "local_sd":
+        return search_local_sd(query)
+    else:
+        log.warning(f"Image source unknown : {image_source}")
+        return None
+
+
+def search_local_sd(query):
+    sd_url = os.getenv("LOCAL_SD_URL")
+    api_key = os.getenv("LOCAL_SD_API_KEY")
+
+    if not sd_url:
+        log.warning("LOCAL_SD_URL is not defined.")
+        return None
+
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "prompt": query,
+        "steps": 20,
+        "width": 512,
+        "height": 512
+    }
+
+    try:
+        response = requests.post(f"{sd_url}/generate", json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        image_url = data.get("image_url")
+        log.debug(f"URL of the locally generated image : {image_url}")
+        return image_url
+    except Exception as e:
+        log.error(f"Error during local generation for '{query}': {e}")
+    return None
+
+def search_unsplash(query):
     api_key = os.getenv("UNSPLASH_ACCESS_KEY")
     if not api_key:
         log.warning("UNSPLASH_ACCESS_KEY is not set. Cannot search for images.")
