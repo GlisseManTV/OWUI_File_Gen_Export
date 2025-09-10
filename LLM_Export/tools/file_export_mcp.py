@@ -499,7 +499,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         image_url = search_image(query)
 
         if image_url:
-            result_tag = f'\n\n<img src="{image_url}" alt="Image search: {query}" />\n\n'
+            result_tag = f'\n\n<img src={image_url} alt=Image search: {query} />\n\n'
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
             result_tag = ""
