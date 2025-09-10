@@ -5,6 +5,7 @@ import json
 import uuid
 import emoji
 import time
+import base64
 import datetime
 import tarfile
 import zipfile
@@ -14,6 +15,7 @@ import requests
 import threading
 import markdown2
 import tempfile
+from PIL import Image
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
