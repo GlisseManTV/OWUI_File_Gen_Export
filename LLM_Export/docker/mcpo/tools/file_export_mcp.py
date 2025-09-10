@@ -61,6 +61,18 @@ def search_image(query):
         return None
 
 
+def search_image(query):
+    image_source = os.getenv("IMAGE_SOURCE", "unsplash")
+
+    if image_source == "unsplash":
+        return search_unsplash(query)
+    elif image_source == "local_sd":
+        return search_local_sd(query)
+    else:
+        log.warning(f"Image source unknown : {image_source}")
+        return None
+
+
 def search_local_sd(query):
     sd_url = os.getenv("LOCAL_SD_URL")
     api_key = os.getenv("LOCAL_SD_API_KEY")
@@ -497,7 +509,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         image_url = search_image(query)
 
         if image_url:
-            result_tag = f"\n\n<img src='{image_url}' alt='Searched image: {query}' />\n\n"
+            result_tag = f'\n\n<img src="{image_url}" alt="Searched image: {query}" />\n\n'
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
             result_tag = ""
@@ -522,7 +534,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             'tables',
             'break-on-newline',
             'cuddled-lists', 
-            'smarty-pants'
         ]
     )
     log.debug(f"Generated HTML:\n{html}") 
@@ -820,7 +831,6 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         'tables',
                         'break-on-newline',
                         'cuddled-lists',
-                        'smarty-pants'
                     ]
                 )
                 log.debug(f"HTML generated for {filename}:\n{html}")
