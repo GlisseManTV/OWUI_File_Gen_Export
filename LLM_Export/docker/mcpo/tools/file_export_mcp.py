@@ -378,58 +378,63 @@ def render_html_elements(soup):
                     log.debug(f"Adding Code/Pre block: {text[:50]}...")
                     story.append(Paragraph(text, styles["CustomCode"]))
                     story.append(Spacer(1, 6 if tag_name == "code" else 8))
-                elif tag_name == "img":
-                    src = elem.get("src")
-                    alt = elem.get("alt", "[Image]")
-                    log.debug(f"Found <img> tag. src='{src}', alt='{alt}'")
-                    if src is not None: 
-                        try:
-                            src_clean = src.replace("&#8221;", '"').replace("&#8221;", '"') 
-                            if src_clean.startswith("image_query:"):
+            elif tag_name == "img":
+                src = elem.get("src")
+                alt = elem.get("alt", "[Image]")
+                log.debug(f"Found <img> tag. src='{src}', alt='{alt}'")
+                if src is not None: 
+                    try:
+                        if src.startswith("image_query:"):
 
-                                query = src_clean.replace("image_query:", "").strip()
-                                log.debug(f"Handling image_query: '{query}'")
-                                image_url = search_image(query)
-                                if image_url:
-                                    log.debug(f"Downloading image from Unsplash URL: {image_url}")
-                                    response = requests.get(image_url)
-                                    log.debug(f"Image download response status: {response.status_code}")
-                                    response.raise_for_status()
-                                    img_data = BytesIO(response.content)
-                                    img = ReportLabImage(img_data, width=200, height=150)
-                                    log.debug("Adding ReportLab Image object to story (Unsplash)")
-                                    story.append(img)
-                                    story.append(Spacer(1, 10))
-                                else:
-                                    log.warning(f"No image found for query: {query}")
-                                    story.append(Paragraph(f"[Image non trouvee pour: {query}]", styles["CustomNormal"]))
-                                    story.append(Spacer(1, 6))
-                            elif src_clean.startswith("http"):
-                                log.debug(f"Downloading image from direct URL: {src_clean}")
-                                response = requests.get(src_clean)
+                            query = src.replace("image_query:", "").strip()
+                            log.debug(f"Handling image_query: '{query}'")
+                            image_url = search_image(query)
+                            if image_url:
+                                log.debug(f"Downloading image from Unsplash URL: {image_url}")
+                                response = requests.get(image_url)
                                 log.debug(f"Image download response status: {response.status_code}")
                                 response.raise_for_status()
                                 img_data = BytesIO(response.content)
                                 img = ReportLabImage(img_data, width=200, height=150)
-                                log.debug("Adding ReportLab Image object to story (Direct URL)")
+                                log.debug("Adding ReportLab Image object to story (Unsplash)")
                                 story.append(img)
                                 story.append(Spacer(1, 10))
                             else:
-                                log.debug(f"Loading local image: {src_clean}")
-                                if os.path.exists(src_clean):
-                                    img = ReportLabImage(src_clean, width=200, height=150)
-                                    log.debug("Adding ReportLab Image object to story (Local)")
-                                    story.append(img)
-                                    story.append(Spacer(1, 10))
-                                else:
-                                   log.error(f"Local image file not found: {src_clean}")
-                                   story.append(Paragraph(f"[Local image not found: {src_clean}]", styles["CustomNormal"]))
-                                   story.append(Spacer(1, 6))
-                        except Exception as e:
-                            log.error(f"Error processing image tag: {e}")
-                            story.append(Paragraph(f"[Image loading error : {alt}]", styles["CustomNormal"]))
-                    else:
-                        story.append(Paragraph("[Error: No image source]", styles["CustomNormal"]))
+                                log.warning(f"No image found for query: {query}")
+                                story.append(Paragraph(f"[Image non trouvee pour: {query}]", styles["CustomNormal"]))
+                                story.append(Spacer(1, 6))
+                        elif src.startswith("http"):
+                            log.debug(f"Downloading image from direct URL: {src}")
+                            response = requests.get(src)
+                            log.debug(f"Image download response status: {response.status_code}")
+                            response.raise_for_status()
+                            img_data = BytesIO(response.content)
+                            img = ReportLabImage(img_data, width=200, height=150)
+                            log.debug("Adding ReportLab Image object to story (Direct URL)")
+                            story.append(img)
+                            story.append(Spacer(1, 10))
+                        else:
+                            log.debug(f"Loading local image: {src}")
+                            if os.path.exists(src):
+                                img = ReportLabImage(src, width=200, height=150)
+                                log.debug("Adding ReportLab Image object to story (Local)")
+                                story.append(img)
+                                story.append(Spacer(1, 10))
+                            else:
+                               log.error(f"Local image file not found: {src}")
+                               story.append(Paragraph(f"[Image locale non trouvee: {src}]", styles["CustomNormal"]))
+                               story.append(Spacer(1, 6))
+                    except requests.exceptions.RequestException as e:
+                        log.error(f"Network error loading image {src}: {e}")
+                        story.append(Paragraph(f"[Image (erreur reseau): {alt}]", styles["CustomNormal"]))
+                        story.append(Spacer(1, 6))
+                    except Exception as e:
+                        log.error(f"Error processing image {src}: {e}", exc_info=True) 
+                        story.append(Paragraph(f"[Image: {alt}]", styles["CustomNormal"]))
+                        story.append(Spacer(1, 6))
+                else:
+                    log.warning("Image tag found with no 'src' attribute.")
+                    story.append(Paragraph(f"[Image: {alt} (source manquante)]", styles["CustomNormal"]))
                     story.append(Spacer(1, 6))
             elif tag_name == "br":
                 log.debug("Adding Spacer for <br>")
@@ -492,7 +497,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         image_url = search_image(query)
 
         if image_url:
-            result_tag = f'\n\n<img src="{image_url}" alt="Searched image: {query}" />\n\n'
+            result_tag = f"\n\n<img src='{image_url}' alt='Searched image: {query}' />\n\n"
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
             result_tag = ""
@@ -545,7 +550,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         doc.build(story)
         log.debug(f"PDF creation succeed: {filepath}")
     except Exception as e:
-        log.error(f"Error in PDF building: {e}", exc_info=True) # Include traceback
+        log.error(f"Error in PDF building: {e}", exc_info=True) 
         log.debug("Attempting to build PDF with error message...")
         simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
         try:
