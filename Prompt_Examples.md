@@ -43,6 +43,17 @@ I got good results with the following prompt:
              - `![Search](image_query: technology innovation)`  
           - Images are retrieved automatically from Unsplash with the specified search parameters.  
           - The system automatically manages the integration of images into the PDF with appropriate formatting.  
+     - **For `create_word`**:
+          - Each element of the document can include an optional `image_query` field which specifies a keyword to search for an image via the Unsplash API.
+          - The LLM must provide **only** the data required to create the Word document:
+             - `type`: Type of element (`"title"`, `"subtitle"`, `"paragraph"`, `"list"`, `"image"`, `"table"`)
+             - text`: Text content of the element (for types "title", "subtitle", "paragraph")
+             - items`: List of elements for lists (for the "list" type)
+             - query`: Image search keyword (for the "image" type)
+             - data`: Table data (for the "table" type)
+          - If the `image` type is provided, an image will automatically be searched for via Unsplash and inserted into the document.
+          - The system automatically applies the default Word styles (Heading 1, Heading 2, List Bullet, etc.).
+          - **Important**: The `content` field must always be a dictionary list, even if it contains a single item.
      - **For `generate_and_archive`** :  
         - Accepts a list of `files_data` objects, each object containing :  
           - `filename` (file name, with extension corresponding to the `format`)
