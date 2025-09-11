@@ -55,7 +55,7 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
    - `LOCAL_SD_CFG_SCALE`: CFG scale to use (default 1.5, not mandatory)
    - `LOCAL_SD_SCHEDULER`: Scheduler to use (default `Karras`, not mandatory)
    - `LOCAL_SD_SAMPLE`: Sampler to use (default `Euler a`, not mandatory)
-   - 
+   
 3. Install dependencies:
    ```bash
    pip install openpyxl reportlab py7zr fastapi uvicorn python-multipart mcp

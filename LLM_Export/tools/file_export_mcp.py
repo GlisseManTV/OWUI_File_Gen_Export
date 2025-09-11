@@ -455,7 +455,7 @@ def render_html_elements(soup):
                                story.append(Spacer(1, 6))
                     except requests.exceptions.RequestException as e:
                         log.error(f"Network error loading image {src}: {e}")
-                        story.append(Paragraph(f"[Image (erreur reseau): {alt}]", styles["CustomNormal"]))
+                        story.append(Paragraph(f"[Image (network error): {alt}]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
                     except Exception as e:
                         log.error(f"Error processing image {src}: {e}", exc_info=True) 
