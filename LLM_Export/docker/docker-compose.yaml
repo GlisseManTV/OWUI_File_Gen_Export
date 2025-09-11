@@ -22,10 +22,19 @@ services:
       - LOG_LEVEL=DEBUG
       - UNSPLASH_ACCESS_KEY=your-unsplash-access-key
       - IMAGE_SOURCE=local_sd
-      - LOCAL_SD_URL=http://localhost:6000
-      - LOCAL_SD_API_KEY=secret_key
+      - LOCAL_SD_URL=http://localhost:7860
+      - LOCAL_SD_USERNAME=local_user
+      - LOCAL_SD_PASSWORD=local_password
+      - LOCAL_SD_DEFAULT_MODEL=sd_xl_base_1.0.safetensors
+      - LOCAL_SD_STEPS=20
+      - LOCAL_SD_WIDTH=512
+      - LOCAL_SD_HEIGHT=512
+      - LOCAL_SD_CFG_SCALE=1.5
+      - LOCAL_SD_SCHEDULER=Karras
+      - LOCAL_SD_SAMPLE=Euler a
     ports:
       - "8000:8000"
+    restart: unless-stopped
     volumes:
       - /your/export-data:/output
     depends_on:

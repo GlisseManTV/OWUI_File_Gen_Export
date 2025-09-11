@@ -12,6 +12,7 @@ import zipfile
 import py7zr
 import logging
 import requests
+from requests.auth import HTTPBasicAuth
 import threading
 import markdown2
 import tempfile
@@ -73,27 +74,47 @@ def search_image(query):
         return None
 
 
-def search_local_sd(query):
-    sd_url = os.getenv("LOCAL_SD_URL")
-    api_key = os.getenv("LOCAL_SD_API_KEY")
+def search_local_sd(query: str):
+    SD_URL = os.getenv("LOCAL_SD_URL")
+    SD_USERNAME = os.getenv("LOCAL_SD_USERNAME")
+    SD_PASSWORD = os.getenv("LOCAL_SD_PASSWORD")
+    DEFAULT_MODEL = os.getenv("LOCAL_SD_DEFAULT_MODEL", "sd_xl_base_1.0.safetensors")
+    DEFAULT_STEPS = int(os.getenv("LOCAL_SD_STEPS", 20))
+    DEFAULT_WIDTH = int(os.getenv("LOCAL_SD_WIDTH", 512))
+    DEFAULT_HEIGHT = int(os.getenv("LOCAL_SD_HEIGHT", 512))
+    DEFAULT_CFG_SCALE = float(os.getenv("LOCAL_SD_CFG_SCALE", 1.5))
+    DEFAULT_SCHEDULER = os.getenv("LOCAL_SD_SCHEDULER", "Karras")
+    DEFAULT_SAMPLE = os.getenv("LOCAL_SD_SAMPLE", "Euler a")
 
-    if not sd_url:
+    if not SD_URL:
         log.warning("LOCAL_SD_URL is not defined.")
         return None
 
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
     payload = {
-        "prompt": query,
-        "steps": 20,
-        "width": 512,
-        "height": 512
+        "prompt": query.strip(),
+        "steps": DEFAULT_STEPS,
+        "width": DEFAULT_WIDTH,
+        "height": DEFAULT_HEIGHT,
+        "cfg_scale": DEFAULT_CFG_SCALE,
+        "sampler_name": DEFAULT_SAMPLE,
+        "scheduler": DEFAULT_SCHEDULER,
+        "enable_hr": False,
+        "hr_upscaler": "Latent",
+        "seed": -1,
+        "override_settings": {
+            "sd_model_checkpoint": DEFAULT_MODEL
+        }
     }
 
     try:
-        response = requests.post(f"{sd_url}/sdapi/v1/txt2img", json=payload, headers=headers)
+        url = f"{SD_URL}/sdapi/v1/txt2img"
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            auth=HTTPBasicAuth(SD_USERNAME, SD_PASSWORD),
+            timeout=30
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -104,6 +125,7 @@ def search_local_sd(query):
 
         image_b64 = images[0]
         image_data = base64.b64decode(image_b64)
+
         folder_path = _generate_unique_folder()
         filename = f"{query.replace(' ', '_')}.png"
         filepath = os.path.join(folder_path, filename)
@@ -114,8 +136,13 @@ def search_local_sd(query):
 
         return _public_url(folder_path, filename)
 
+    except requests.exceptions.Timeout:
+        log.error(f"Timeout during generation for : '{query}'")
+    except requests.exceptions.RequestException as e:
+        log.error(f"Network error : {e}")
     except Exception as e:
-        log.error(f"Error during local generation for '{query}': {e}")
+        log.error(f"Unexpected error : {e}")
+
     return None
 
 def search_unsplash(query):

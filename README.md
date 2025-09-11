@@ -1,4 +1,4 @@
-# OWUI_File_Gen_Export – Export Files Directly from Open WebUI
+# MCPO-File-Generation-Tool – Export Files Directly from Open WebUI
 
 A lightweight, MCPO-integrated tool that lets you **generate and export real files** (PDF, Excel, PowerPoint, ZIP, etc.) directly from Open WebUI — just like ChatGPT or Claude.
 
@@ -25,14 +25,14 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
 
 # 🚀 Quick Start
 
-## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Best_Practices.md)
-## Prompt examples here: [Prompt_Examples.md](https://github.com/GlisseManTV/OWUI_File_Gen_Export/blob/master/Prompt_Examples.md)
+## Best practices here: [Best_Practices.md](https://github.com/GlisseManTV/MCPO-File-Generation-Tool/blob/master/Best_Practices.md)
+## Prompt examples here: [Prompt_Examples.md](https://github.com/GlisseManTV/MCPO-File-Generation-Tool/blob/master/Prompt_Examples.md)
 
 ### 🔧 For Python Users
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/GlisseManTV/OWUI_File_Gen_Export.git
+   git clone https://github.com/GlisseManTV/MCPO-File-Generation-Tool.git
    ```
 
 2. Update env variables in `config.json`:
@@ -46,8 +46,16 @@ https://github.com/user-attachments/assets/1e70a977-62f1-498c-895c-7db135ded95b
    - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
    - `IMAGE_SOURCE`: "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance (default is "unsplash")
    - `LOCAL_SD_URL`: URL of your local Stable Diffusion instance (if using local_sd) (no default value, mandatory if local_sd is used above)
-   - `LOCAL_SD_API_KEY`: API key of your local Stable Diffusion instance (if any) (no default value, not mandatory)
-
+   - `LOCAL_SD_USERNAME`: Username of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_PASSWORD`: Password of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_DEFAULT_MODEL`: Default model to use (if any) (default `sd_xl_base_1.0.safetensors`, not mandatory)
+   - `LOCAL_SD_STEPS`: Number of steps to use (default 20, not mandatory)
+   - `LOCAL_SD_WIDTH`: Width of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_HEIGHT`: Height of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_CFG_SCALE`: CFG scale to use (default 1.5, not mandatory)
+   - `LOCAL_SD_SCHEDULER`: Scheduler to use (default `Karras`, not mandatory)
+   - `LOCAL_SD_SAMPLE`: Sampler to use (default `Euler a`, not mandatory)
+   - 
 3. Install dependencies:
    ```bash
    pip install openpyxl reportlab py7zr fastapi uvicorn python-multipart mcp
@@ -84,8 +92,16 @@ This is an example of a minimal `config.json` for MCPO to enable file export but
 				"FILES_DELAY": "60", <==== HERE set the delay in minut to wait before checking for new files
                 "UNSPLASH_ACCESS_KEY":"", <== Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
 				"IMAGE_SOURCE": "local_sd", <==== HERE set to "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance>
-				"LOCAL_SD_URL": "http://localhost:6000", <==== HERE set to the URL of your local Stable Diffusion instance>
-				"LOCAL_SD_API_KEY": "secret_key" <==== HERE set to the API key of your local Stable Diffusion instance (if any)
+				"LOCAL_SD_URL": "http://localhost:7860", <==== HERE set to the URL of your local Stable Diffusion instance>
+                "LOCAL_SD_USERNAME": "local_user", <==== HERE set to the username of your local Stable Diffusion instance (if any)>
+                "LOCAL_SD_PASSWORD": "local_password", <==== HERE set to the password of your local Stable Diffusion instance (if any)>
+                "LOCAL_SD_DEFAULT_MODEL": "sd_xl_base_1.0.safetensors", <==== HERE set to the default model to use (if any)>
+                "LOCAL_SD_STEPS": "20", <==== HERE set to the number of steps to use (if any)>
+                "LOCAL_SD_WIDTH": "512", <==== HERE set to the width of the image to generate (if any)>
+                "LOCAL_SD_HEIGHT": "512", <==== HERE set to the height of the image to generate (if any)>
+                "LOCAL_SD_CFG_SCALE": "1.5", <==== HERE set to the CFG scale to use (if any)>
+                "LOCAL_SD_SCHEDULER": "Karras", <==== HERE set to the scheduler to use (if any)>
+                "LOCAL_SD_SAMPLE": "Euler a" <==== HERE set to the sampler to use (if any)>
 			},
 			"disabled": false,
 			"autoApprove": []
@@ -114,6 +130,17 @@ For OWUI-MCPO
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
    - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
+   - `IMAGE_SOURCE`: "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance (default is "unsplash")
+   - `LOCAL_SD_URL`: URL of your local Stable Diffusion instance (if using local_sd) (no default value, mandatory if local_sd is used above)
+   - `LOCAL_SD_USERNAME`: Username of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_PASSWORD`: Password of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_DEFAULT_MODEL`: Default model to use (if any) (default `sd_xl_base_1.0.safetensors`, not mandatory)
+   - `LOCAL_SD_STEPS`: Number of steps to use (default 20, not mandatory)
+   - `LOCAL_SD_WIDTH`: Width of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_HEIGHT`: Height of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_CFG_SCALE`: CFG scale to use (default 1.5, not mandatory)
+   - `LOCAL_SD_SCHEDULER`: Scheduler to use (default `Karras`, not mandatory)
+   - `LOCAL_SD_SAMPLE`: Sampler to use (default `Euler a`, not mandatory)
 
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
@@ -157,10 +184,19 @@ services:
       - LOG_LEVEL=INFO
       - UNSPLASH_ACCESS_KEY=top-secret
       - IMAGE_SOURCE=local_sd
-      - LOCAL_SD_URL=http://localhost:6000
-      - LOCAL_SD_API_KEY=secret_key
+      - LOCAL_SD_URL=http://localhost:7860
+      - LOCAL_SD_USERNAME=local_user
+      - LOCAL_SD_PASSWORD=local_password
+      - LOCAL_SD_DEFAULT_MODEL=sd_xl_base_1.0.safetensors
+      - LOCAL_SD_STEPS=20
+      - LOCAL_SD_WIDTH=512
+      - LOCAL_SD_HEIGHT=512
+      - LOCAL_SD_CFG_SCALE=1.5
+      - LOCAL_SD_SCHEDULER=Karras
+      - LOCAL_SD_SAMPLE=Euler a
     ports:
       - "8000:8000"
+    restart: unless-stopped
     volumes:
       - /your/export-data:/output
     depends_on:
@@ -183,7 +219,7 @@ services:
 ## 📂 Project Structure
 
 ```
-OWUI_File_Gen_Export/
+MCPO-File-Generation-Tool/
 ├── LLM_Export/
 │   ├── tools/
 │   │   ├── file_export_server.py
@@ -285,7 +321,18 @@ For OWUI-MCPO
    - `PERSISTENT_FILES`: Set to `true` to keep files after download, `false` to delete after delay (default is `false`)
    - `FILES_DELAY`: Delay in minut to wait before checking for new files (default is 60)
    - `UNSPLASH_ACCESS_KEY`: Your Unsplash API key (no default value, not mandatory but advised) see [here](https://unsplash.com/documentation#creating-a-developer-account)
-
+   - `IMAGE_SOURCE`: "unsplash" to use Unsplash for image generation or "local_sd" to use your local Stable Diffusion instance (default is "unsplash")
+   - `LOCAL_SD_URL`: URL of your local Stable Diffusion instance (if using local_sd) (no default value, mandatory if local_sd is used above)
+   - `LOCAL_SD_USERNAME`: Username of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_PASSWORD`: Password of your local Stable Diffusion instance (if any) (no default value, not mandatory)
+   - `LOCAL_SD_DEFAULT_MODEL`: Default model to use (if any) (default `sd_xl_base_1.0.safetensors`, not mandatory)
+   - `LOCAL_SD_STEPS`: Number of steps to use (default 20, not mandatory)
+   - `LOCAL_SD_WIDTH`: Width of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_HEIGHT`: Height of the image to generate (default 512, not mandatory)
+   - `LOCAL_SD_CFG_SCALE`: CFG scale to use (default 1.5, not mandatory)
+   - `LOCAL_SD_SCHEDULER`: Scheduler to use (default `Karras`, not mandatory)
+   - `LOCAL_SD_SAMPLE`: Sampler to use (default `Euler a`, not mandatory)
+  
 For OWUI-FILE-EXPORT-SERVER
    - `FILE_EXPORT_DIR`: Directory where files will be saved (must match the MCPO's export directory) (default is `/output`) path must be mounted as a volume
 
@@ -328,10 +375,19 @@ services:
       - LOG_LEVEL=DEBUG
       - UNSPLASH_ACCESS_KEY=top-secret
       - IMAGE_SOURCE=local_sd
-      - LOCAL_SD_URL=http://localhost:6000
-      - LOCAL_SD_API_KEY=secret_key
+      - LOCAL_SD_URL=http://localhost:7860
+      - LOCAL_SD_USERNAME=local_user
+      - LOCAL_SD_PASSWORD=local_password
+      - LOCAL_SD_DEFAULT_MODEL=sd_xl_base_1.0.safetensors
+      - LOCAL_SD_STEPS=20
+      - LOCAL_SD_WIDTH=512
+      - LOCAL_SD_HEIGHT=512
+      - LOCAL_SD_CFG_SCALE=1.5
+      - LOCAL_SD_SCHEDULER=Karras
+      - LOCAL_SD_SAMPLE=Euler a
     ports:
       - "8000:8000"
+    restart: unless-stopped
     volumes:
       - /your/export-data:/output
     depends_on:
