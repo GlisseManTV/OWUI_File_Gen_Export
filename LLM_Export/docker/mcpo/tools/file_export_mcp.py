@@ -532,23 +532,47 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
     folder_path = _generate_unique_folder()
     filepath, fname = _generate_filename(folder_path, "pptx", filename)
 
+    # --- normalize presentation + layouts (template or blank; single-slide template => use same layout for all) ---
+    use_template = False
+    prs = None
+    title_layout = None
+    content_layout = None
+
     if PPTX_TEMPLATE:
-        src = PPTX_TEMPLATE
-        if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
-            buf = BytesIO()
-            PPTX_TEMPLATE.save(buf); buf.seek(0)
-            src = buf
-        prs = Presentation(src)
-        if len(prs.slides) < 2:
-            raise ValueError("Template must have at least 2 slides (title + content).")
-        title_layout = prs.slides[0].slide_layout
-        content_layout = prs.slides[1].slide_layout
-        # keep only title slide
-        for i in range(len(prs.slides) - 1, 0, -1):
-            rId = prs.slides._sldIdLst[i].rId  
-            prs.part.drop_rel(rId)
-            del prs.slides._sldIdLst[i]       
-        # set title text
+        try:
+            src = PPTX_TEMPLATE
+            if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
+                buf = BytesIO()
+                PPTX_TEMPLATE.save(buf); buf.seek(0)
+                src = buf
+
+            tmp = Presentation(src)
+            if len(tmp.slides) >= 1:
+                prs = tmp
+                use_template = True
+
+                # If the template has 2+ slides: slide 0 = title layout, slide 1 = content layout
+                # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
+                title_layout = prs.slides[0].slide_layout
+                content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
+
+                # Keep only the first slide (as title base)
+                for i in range(len(prs.slides) - 1, 0, -1):
+                    rId = prs.slides._sldIdLst[i].rId  # type: ignore[attr-defined]
+                    prs.part.drop_rel(rId)
+                    del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
+            # else -> fall through to no-template
+        except Exception:
+            use_template = False
+            prs = None
+
+    if not use_template:
+        prs = Presentation()
+        title_layout = prs.slide_layouts[0]
+        content_layout = prs.slide_layouts[1]
+
+    # Title slide (either existing template title, or newly added)
+    if use_template:
         tslide = prs.slides[0]
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -556,9 +580,6 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                 for r in p.runs:
                     r.font.size = Pt(28); r.font.bold = True
     else:
-        prs = Presentation()
-        title_layout = prs.slide_layouts[0]
-        content_layout = prs.slide_layouts[1]
         tslide = prs.slides.add_slide(title_layout)
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -587,6 +608,7 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
 
         slide = prs.slides.add_slide(content_layout)
 
+        # Title
         if slide.shapes.title:
             slide.shapes.title.text = slide_title
             for p in slide.shapes.title.text_frame.paragraphs:
@@ -595,23 +617,26 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
 
         # Find or create a content shape
         content_shape = None
-        for ph in slide.placeholders:
-            try:
-                if ph.placeholder_format.idx == 1:
-                    content_shape = ph; break
-            except Exception:
-                pass
-        if content_shape is None:
+        try:
             for ph in slide.placeholders:
                 try:
-                    if ph.placeholder_format.idx != 0:
+                    if ph.placeholder_format.idx == 1:
                         content_shape = ph; break
                 except Exception:
                     pass
+            if content_shape is None:
+                for ph in slide.placeholders:
+                    try:
+                        if ph.placeholder_format.idx != 0:
+                            content_shape = ph; break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         if content_shape is None:
             content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(1.5), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - 2.0))
 
-        # prep text frame: clean, wrap, autosize, small inner margins
+        # prep text frame: wrap + shrink-to-fit + small inner margins
         tf = content_shape.text_frame
         try:
             tf.clear()
@@ -627,13 +652,13 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
         except Exception:
             pass
 
-        # --- optional image, compute remaining content box accurately ---
-        image_query = slide_data.get("image_query")
+        # default content box (will adjust if image present)
         content_left_in, content_top_in = page_margin, 1.5
-        # default provisional area (updated below if image is placed)
         content_width_in = slide_w_in - 2*page_margin
         content_height_in = slide_h_in - (1.5 + page_margin)
 
+        # Optional image placement with proper content reflow
+        image_query = slide_data.get("image_query")
         if image_query:
             image_url = search_image(image_query)
             if image_url:
@@ -649,7 +674,6 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                     else:
                         img_w_in, img_h_in = 3.0, 2.0
 
-                    # Compute positions + the true remaining text box
                     if pos == "left":
                         img_left_in = page_margin
                         img_top_in = 1.5
@@ -679,7 +703,6 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                         content_width_in = slide_w_in - 2*page_margin
                         content_height_in = max(img_top_in - gutter - content_top_in, 2.0)
                     else:
-                        # default: right
                         img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
                         img_top_in = 1.5
                         content_left_in = page_margin
@@ -687,13 +710,11 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
                         content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
                         content_height_in = slide_h_in - (1.5 + page_margin)
 
-                    # place image
                     slide.shapes.add_picture(stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
                 except Exception:
-                    # ignore image failures and keep default content area
                     pass
 
-        # apply content box geometry (after image math)
+        # apply content box geometry
         try:
             content_shape.left = Inches(content_left_in)
             content_shape.top = Inches(content_top_in)
@@ -702,22 +723,19 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
         except Exception:
             pass
 
-        # Estimate max_chars from area to guide dynamic size (autosize will still fine-tune down)
-        approx_chars_per_in = 9.5  # rough for Calibri; tweak if needed
-        approx_lines_per_in = 1.6  # rough line density
+        # estimate capacity to guide initial font size; autosize will fine-tune
+        approx_chars_per_in = 9.5
+        approx_lines_per_in = 1.6
         est_capacity = int(content_width_in * approx_chars_per_in * content_height_in * approx_lines_per_in)
-
         font_size = dynamic_font_size(content_list, max_chars=max(est_capacity, 120), base_size=24, min_size=12)
 
-        # Fill paragraphs (clear ensured above)
-        # Ensure first paragraph exists
         if not tf.paragraphs:
             tf.add_paragraph()
         for idx, line in enumerate(content_list):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             run = p.add_run()
             run.text = line
-            run.font.size = font_size     # starting point
+            run.font.size = font_size
             run.font.name = "Calibri"
             p.space_after = Pt(6)
 
