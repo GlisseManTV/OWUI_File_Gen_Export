@@ -13,6 +13,7 @@ Whether you're building a project, generating reports, or archiving assets, this
 | `create_excel(data, filename, persistent=True)` | Generate Excel files from arrays | `.xlsx` |
 | `create_csv(data, filename, persistent=True)` | Create CSV files from structured data | `.csv` |
 | `create_pdf(text, filename, persistent=True)` | Turn content into polished PDFs | `.pdf` |
+| `create_word (content, filename, persistent=True)` | Build Word documents with rich formatting | `.docx` |
 | `create_file(content, filename, persistent=True)` | Output any text-based file (`.py`, `.html`, `.json`, `.xml`, `.md`, etc.) | Any |
 | `create_presentation(slides_data, filename, persistent=True, title)` | Build dynamic presentations | `.pptx` |
 | `generate_and_archive(files_data, archive_format="zip", archive_name=None, persistent=True)` | **Pack multiple files into a single `.zip`, `.tar.gz`, or `.7z` archive** | `.zip`, `.tar.gz`, `.7z` |
