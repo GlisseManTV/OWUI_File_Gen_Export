@@ -5,15 +5,21 @@ import json
 import uuid
 import emoji
 import time
+import base64
 import datetime
 import tarfile
 import zipfile
 import py7zr
 import logging
 import requests
+from requests.auth import HTTPBasicAuth
 import threading
 import markdown2
 import tempfile
+from PIL import Image
+from docx import Document
+from docx.shared import Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
@@ -52,6 +58,101 @@ if PPTX_TEMPLATE_PATH and os.path.exists(PPTX_TEMPLATE_PATH):
     logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
 
 def search_image(query):
+    image_source = os.getenv("IMAGE_SOURCE", "unsplash")
+
+    if image_source == "unsplash":
+        return search_unsplash(query)
+    elif image_source == "local_sd":
+        return search_local_sd(query)
+    else:
+        log.warning(f"Image source unknown : {image_source}")
+        return None
+
+
+def search_image(query):
+    image_source = os.getenv("IMAGE_SOURCE", "unsplash")
+
+    if image_source == "unsplash":
+        return search_unsplash(query)
+    elif image_source == "local_sd":
+        return search_local_sd(query)
+    else:
+        log.warning(f"Image source unknown : {image_source}")
+        return None
+
+
+def search_local_sd(query: str):
+    SD_URL = os.getenv("LOCAL_SD_URL")
+    SD_USERNAME = os.getenv("LOCAL_SD_USERNAME")
+    SD_PASSWORD = os.getenv("LOCAL_SD_PASSWORD")
+    DEFAULT_MODEL = os.getenv("LOCAL_SD_DEFAULT_MODEL", "sd_xl_base_1.0.safetensors")
+    DEFAULT_STEPS = int(os.getenv("LOCAL_SD_STEPS", 20))
+    DEFAULT_WIDTH = int(os.getenv("LOCAL_SD_WIDTH", 512))
+    DEFAULT_HEIGHT = int(os.getenv("LOCAL_SD_HEIGHT", 512))
+    DEFAULT_CFG_SCALE = float(os.getenv("LOCAL_SD_CFG_SCALE", 1.5))
+    DEFAULT_SCHEDULER = os.getenv("LOCAL_SD_SCHEDULER", "Karras")
+    DEFAULT_SAMPLE = os.getenv("LOCAL_SD_SAMPLE", "Euler a")
+
+    if not SD_URL:
+        log.warning("LOCAL_SD_URL is not defined.")
+        return None
+
+    payload = {
+        "prompt": query.strip(),
+        "steps": DEFAULT_STEPS,
+        "width": DEFAULT_WIDTH,
+        "height": DEFAULT_HEIGHT,
+        "cfg_scale": DEFAULT_CFG_SCALE,
+        "sampler_name": DEFAULT_SAMPLE,
+        "scheduler": DEFAULT_SCHEDULER,
+        "enable_hr": False,
+        "hr_upscaler": "Latent",
+        "seed": -1,
+        "override_settings": {
+            "sd_model_checkpoint": DEFAULT_MODEL
+        }
+    }
+
+    try:
+        url = f"{SD_URL}/sdapi/v1/txt2img"
+        response = requests.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            auth=HTTPBasicAuth(SD_USERNAME, SD_PASSWORD),
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        images = data.get("images", [])
+        if not images:
+            log.warning(f"No image generated for the request : '{query}'")
+            return None
+
+        image_b64 = images[0]
+        image_data = base64.b64decode(image_b64)
+
+        folder_path = _generate_unique_folder()
+        filename = f"{query.replace(' ', '_')}.png"
+        filepath = os.path.join(folder_path, filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        with open(filepath, "wb") as f:
+            f.write(image_data)
+
+        return _public_url(folder_path, filename)
+
+    except requests.exceptions.Timeout:
+        log.error(f"Timeout during generation for : '{query}'")
+    except requests.exceptions.RequestException as e:
+        log.error(f"Network error : {e}")
+    except Exception as e:
+        log.error(f"Unexpected error : {e}")
+
+    return None
+
+def search_unsplash(query):
     api_key = os.getenv("UNSPLASH_ACCESS_KEY")
     if not api_key:
         log.warning("UNSPLASH_ACCESS_KEY is not set. Cannot search for images.")
@@ -371,7 +472,7 @@ def render_html_elements(soup):
                                story.append(Spacer(1, 6))
                     except requests.exceptions.RequestException as e:
                         log.error(f"Network error loading image {src}: {e}")
-                        story.append(Paragraph(f"[Image (erreur reseau): {alt}]", styles["CustomNormal"]))
+                        story.append(Paragraph(f"[Image (network error): {alt}]", styles["CustomNormal"]))
                         story.append(Spacer(1, 6))
                     except Exception as e:
                         log.error(f"Error processing image {src}: {e}", exc_info=True) 
@@ -445,7 +546,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             result_tag = f'\n\n<img src="{image_url}" alt="Searched image: {query}" />\n\n'
             log.debug(f"Replaced image_query '{query}' with URL: {image_url}")
         else:
-            result_tag = f'\n\n<p>[Image not found for: {query}]</p>\n\n'
+            result_tag = ""
             log.warning(f"Failed to find image for query: '{query}'")
 
         log.debug(f"Replacement result: {result_tag}")
@@ -467,7 +568,6 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
             'tables',
             'break-on-newline',
             'cuddled-lists', 
-            'smarty-pants'
         ]
     )
     log.debug(f"Generated HTML:\n{html}") 
@@ -495,7 +595,7 @@ def create_pdf(text: list[str], filename: str = None, persistent: bool = PERSIST
         doc.build(story)
         log.debug(f"PDF creation succeed: {filepath}")
     except Exception as e:
-        log.error(f"Error in PDF building: {e}", exc_info=True) # Include traceback
+        log.error(f"Error in PDF building: {e}", exc_info=True) 
         log.debug("Attempting to build PDF with error message...")
         simple_story = [Paragraph("Error in PDF generation", styles["CustomNormal"])]
         try:
@@ -745,6 +845,94 @@ def create_presentation(slides_data: list[dict], filename: str = None, persisten
     return {"url": _public_url(folder_path, fname)}
 
 @mcp.tool()
+def create_word(content: list[dict], filename: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
+    folder_path = _generate_unique_folder()
+    filepath, fname = _generate_filename(folder_path, "docx", filename)
+    doc = Document()
+    
+    log.debug("Start creating Word document")
+    
+    for item in content:
+        log.debug(f"Treatment of the element : {item}")
+        if isinstance(item, str):
+            doc.add_paragraph(item)
+            log.debug("Adding a single paragraph")
+        elif isinstance(item, dict):
+            if item.get("type") == "image_query":
+                new_item = {
+                    "type": "image",
+                    "query": item.get("query")
+                }
+                image_query = new_item.get("query")
+                if image_query:
+                    log.debug(f"Image search for the query : {image_query}")
+                    image_url = search_image(image_query)
+                    if image_url:
+                        response = requests.get(image_url)
+                        image_data = BytesIO(response.content)
+                        doc.add_picture(image_data, width=Inches(6))
+                        log.debug("Image successfully added")
+                    else:
+                        log.warning(f"Image search for : '{image_query}'")
+            elif "type" in item:
+                item_type = item.get("type")
+                if item_type == "title":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 1']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    log.debug("Title added")
+                elif item_type == "subtitle":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 2']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    log.debug("Subtitle added")
+                elif item_type == "paragraph":
+                    doc.add_paragraph(item.get("text", ""))
+                    log.debug("Paragraph added")
+                elif item_type == "list":
+                    items = item.get("items", [])
+                    for i, item_text in enumerate(items):
+                        if i == 0:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                        else:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                    log.debug("List added")
+                elif item_type == "image":
+                    image_query = item.get("query")
+                    if image_query:
+                        log.debug(f"Image search for the query : {image_query}")
+                        image_url = search_image(image_query)
+                        if image_url:
+                            response = requests.get(image_url)
+                            image_data = BytesIO(response.content)
+                            doc.add_picture(image_data, width=Inches(6))
+                            log.debug("Image successfully added")
+                        else:
+                            log.warning(f"Image search for : '{image_query}'")
+                elif item_type == "table":
+                    data = item.get("data", [])
+                    if data:
+                        table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                        for i, row in enumerate(data):
+                            for j, cell in enumerate(row):
+                                table.cell(i, j).text = str(cell)
+                        log.debug("Table added")
+            elif "text" in item:
+                doc.add_paragraph(item["text"])
+                log.debug("Paragraph added")
+    
+    doc.save(filepath)
+    log.debug(f"Document registered at : {filepath}")
+    
+    if not persistent:
+        _cleanup_files(folder_path, FILES_DELAY)
+        log.debug("Cleaning up temporary files")
+    
+    return {"url": _public_url(folder_path, fname)}
+
+@mcp.tool()
 def generate_and_archive(files_data: list[dict], archive_format: str = "zip", archive_name: str = None, persistent: bool = PERSISTENT_FILES) -> dict:
     folder_path = _generate_unique_folder()
     generated_files = []
@@ -777,7 +965,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         tag = f'<img src="{image_url}" alt="Image search: {query}" />'
                         log.debug(f"Replaced image_query '{query}' with {image_url}")
                     else:
-                        tag = f'<img src="" alt="Image not found for: {query}" />'
+                        result_tag = ""
                         log.warning(f"No image found for '{query}'")
                     return tag
 
@@ -791,7 +979,6 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         'tables',
                         'break-on-newline',
                         'cuddled-lists',
-                        'smarty-pants'
                     ]
                 )
                 log.debug(f"HTML generated for {filename}:\n{html}")
@@ -936,6 +1123,84 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
                         content_shape.width = Inches(7)
                         content_shape.height = Inches(4)
                 prs.save(filepath)
+            elif format_type == "docx":
+                doc = Document()
+                log.debug("Start creating Word document")
+                if isinstance(content, list):
+                    for item in content:
+                        log.debug(f"Treatment of the element : {item}")
+                        if isinstance(item, str):
+                            doc.add_paragraph(item)
+                            log.debug("Adding a single paragraph")
+                        elif isinstance(item, dict):
+                            if item.get("type") == "image_query":
+                                new_item = {
+                                    "type": "image",
+                                    "query": item.get("query")
+                                }
+                                image_query = new_item.get("query")
+                                if image_query:
+                                    log.debug(f"Image search for the query : {image_query}")
+                                    image_url = search_image(image_query)
+                                    if image_url:
+                                        response = requests.get(image_url)
+                                        image_data = BytesIO(response.content)
+                                        doc.add_picture(image_data, width=Inches(6))
+                                        log.debug("Image successfully added")
+                                    else:
+                                        log.warning(f"Failed image search for : '{image_query}'")
+                            elif "type" in item:
+                                item_type = item.get("type")
+                                if item_type == "title":
+                                    paragraph = doc.add_paragraph(item.get("text", ""))
+                                    paragraph.style = doc.styles['Heading 1']
+                                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                    log.debug("Title added")
+                                elif item_type == "subtitle":
+                                    paragraph = doc.add_paragraph(item.get("text", ""))
+                                    paragraph.style = doc.styles['Heading 2']
+                                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                    log.debug("Subtitle added")
+                                elif item_type == "paragraph":
+                                    doc.add_paragraph(item.get("text", ""))
+                                    log.debug("Paragraph added")
+                                elif item_type == "list":
+                                    items = item.get("items", [])
+                                    for i, item_text in enumerate(items):
+                                        if i == 0:
+                                            paragraph = doc.add_paragraph(item_text)
+                                            paragraph.style = doc.styles['List Bullet']
+                                        else:
+                                            paragraph = doc.add_paragraph(item_text)
+                                            paragraph.style = doc.styles['List Bullet']
+                                    log.debug("List added")
+                                elif item_type == "image":
+                                    image_query = item.get("query")
+                                    if image_query:
+                                        log.debug(f"Image search for the query : {image_query}")
+                                        image_url = search_image(image_query)
+                                        if image_url:
+                                            response = requests.get(image_url)
+                                            image_data = BytesIO(response.content)
+                                            doc.add_picture(image_data, width=Inches(6))
+                                            log.debug("Image successfully added")
+                                        else:
+                                            log.warning(f"Failed image search for : '{image_query}'")
+                                elif item_type == "table":
+                                    data = item.get("data", [])
+                                    if data:
+                                        table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                                        for i, row in enumerate(data):
+                                            for j, cell in enumerate(row):
+                                                table.cell(i, j).text = str(cell)
+                                        log.debug("Table added")
+                            elif "text" in item:
+                                doc.add_paragraph(item["text"])
+                                log.debug("Paragraph added")
+                else:
+                    doc.add_paragraph(str(content))
+                doc.save(filepath)
+                log.debug(f"Word document saved at : {filepath}")
             else:
                 with open(filepath, "w", encoding="utf-8") as f:
                     f.write(content)
