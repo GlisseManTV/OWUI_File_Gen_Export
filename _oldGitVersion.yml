@@ -1,8 +1,0 @@
-mode: Mainline
-branches:
-  master:
-    tag: ''
-    increment: Minor
-  dev:
-    tag: 'dev'
-    increment: Patch

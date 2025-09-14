@@ -19,7 +19,7 @@ I got good results with the following prompt:
      - Never mix several formats in the same file.  
      - For `.xml`: if the declaration `<?xml ...?>` is missing, it will be added automatically.  
      - Absolute rules for archive generation:
-     - Absolute ban** on using individual file creation functions (such as `create_file`, `create_excel`, `create_pdf`, etc.) **when an archive is requested**.     
+     - **Absolute ban** on using individual file creation functions (such as `create_file`, `create_excel`, `create_pdf`, etc.) **when an archive is requested**.     
      - Uniquely**, the `generate_and_archive` function must be used for all archive requests (`.zip`, `.tar.gz`, `.7z`).
      - This function **must** be used **exclusively** to create **all files** requested **in a single operation**, without separate pre-generation.
      - No file should be created via an individual function before `generate_and_archive`**: each file is generated **directly within** this function.

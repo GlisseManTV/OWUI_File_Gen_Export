@@ -27,6 +27,7 @@ import csv
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.parts.image import Image
+from pptx.enum.text import MSO_AUTO_SIZE
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -49,6 +50,12 @@ LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")
 LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
+
+PPTX_TEMPLATE_PATH= os.getenv("PPTX_TEMPLATE_PATH",None)
+PPTX_TEMPLATE = None
+if PPTX_TEMPLATE_PATH and os.path.exists(PPTX_TEMPLATE_PATH):
+    PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
+    logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
 
 def search_image(query):
     log.debug(f"Searching for image with query: '{query}'")
@@ -592,104 +599,212 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         folder_path = _generate_unique_folder()
     if filename:
         filepath = os.path.join(folder_path, filename)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        fname = filename
+    # --- normalize presentation + layouts (template or blank; single-slide template => use same layout for all) ---
+    use_template = False
+    prs = None
+    title_layout = None
+    content_layout = None
+
+    if PPTX_TEMPLATE:
+        try:
+            src = PPTX_TEMPLATE
+            if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
+                buf = BytesIO()
+                PPTX_TEMPLATE.save(buf); buf.seek(0)
+                src = buf
+
+            tmp = Presentation(src)
+            if len(tmp.slides) >= 1:
+                prs = tmp
+                use_template = True
+
+                # If the template has 2+ slides: slide 0 = title layout, slide 1 = content layout
+                # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
+                title_layout = prs.slides[0].slide_layout
+                content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
+
+                # Keep only the first slide (as title base)
+                for i in range(len(prs.slides) - 1, 0, -1):
+                    rId = prs.slides._sldIdLst[i].rId  # type: ignore[attr-defined]
+                    prs.part.drop_rel(rId)
+                    del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
+            # else -> fall through to no-template
+        except Exception:
+            use_template = False
+            prs = None
+
+    if not use_template:
+        prs = Presentation()
+        title_layout = prs.slide_layouts[0]
+        content_layout = prs.slide_layouts[1]
+
+    # Title slide (either existing template title, or newly added)
+    if use_template:
+        tslide = prs.slides[0]
+        if tslide.shapes.title:
+            tslide.shapes.title.text = title or ""
+            for p in tslide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(28); r.font.bold = True
     else:
-        filepath, fname = _generate_filename(folder_path, "pptx")
-    prs = Presentation()
-    title_slide_layout = prs.slide_layouts[0]
-    slide = prs.slides.add_slide(title_slide_layout)
-    slide.shapes.title.text = title or "Presentation"
-    for slide_data in slides_data or []:
+        tslide = prs.slides.add_slide(title_layout)
+        if tslide.shapes.title:
+            tslide.shapes.title.text = title or ""
+            for p in tslide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(28); r.font.bold = True
+
+    # slide size in inches (for robust layout math)
+    EMU_PER_IN = 914400
+    slide_w_in = prs.slide_width / EMU_PER_IN
+    slide_h_in = prs.slide_height / EMU_PER_IN
+
+    # shared margins/gutters
+    page_margin = 0.5   # outer margin on each side (inches)
+    gutter = 0.3        # space between image and text (inches)
+
+    # --- shared path: add content slides ---
+    for slide_data in slides_data:
         if not isinstance(slide_data, dict):
-            continue
-        slide_layout = prs.slide_layouts[1]
-        slide = prs.slides.add_slide(slide_layout)
+            raise ValueError("Each slide must be a dictionary.")
+
         slide_title = slide_data.get("title", "Untitled")
         content_list = slide_data.get("content", [])
         if not isinstance(content_list, list):
             content_list = [content_list]
 
-        content_shape = slide.placeholders[1]
-        content_shape.text = ""  
-        font_size = dynamic_font_size(content_list, max_chars=300, base_size=24, min_size=12)    
-   
-        title_shape = slide.shapes.title
-        title_shape.text = slide_title
-        for paragraph in title_shape.text_frame.paragraphs:
-            for run in paragraph.runs:
-                run.font.size = Pt(28)
-                run.font.bold = True
+        slide = prs.slides.add_slide(content_layout)
 
+        # Title
+        if slide.shapes.title:
+            slide.shapes.title.text = slide_title
+            for p in slide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(28); r.font.bold = True
 
-        for line in content_list:
-            p = content_shape.text_frame.add_paragraph()
+        # Find or create a content shape
+        content_shape = None
+        try:
+            for ph in slide.placeholders:
+                try:
+                    if ph.placeholder_format.idx == 1:
+                        content_shape = ph; break
+                except Exception:
+                    pass
+            if content_shape is None:
+                for ph in slide.placeholders:
+                    try:
+                        if ph.placeholder_format.idx != 0:
+                            content_shape = ph; break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        if content_shape is None:
+            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(1.5), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - 2.0))
+
+        # prep text frame: wrap + shrink-to-fit + small inner margins
+        tf = content_shape.text_frame
+        try:
+            tf.clear()
+        except Exception:
+            pass
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        try:
+            tf.margin_left = Inches(0.1)
+            tf.margin_right = Inches(0.1)
+            tf.margin_top = Inches(0.05)
+            tf.margin_bottom = Inches(0.05)
+        except Exception:
+            pass
+
+        # default content box (will adjust if image present)
+        content_left_in, content_top_in = page_margin, 1.5
+        content_width_in = slide_w_in - 2*page_margin
+        content_height_in = slide_h_in - (1.5 + page_margin)
+
+        # Optional image placement with proper content reflow
+        image_query = slide_data.get("image_query")
+        if image_query:
+            image_url = search_image(image_query)
+            if image_url:
+                try:
+                    img = requests.get(image_url, timeout=10).content
+                    stream = BytesIO(img)
+                    pos = (slide_data.get("image_position") or "right").lower()
+                    size = (slide_data.get("image_size") or "medium").lower()
+                    if size == "small":
+                        img_w_in, img_h_in = 2.0, 1.5
+                    elif size == "large":
+                        img_w_in, img_h_in = 4.0, 3.0
+                    else:
+                        img_w_in, img_h_in = 3.0, 2.0
+
+                    if pos == "left":
+                        img_left_in = page_margin
+                        img_top_in = 1.5
+                        content_left_in = img_left_in + img_w_in + gutter
+                        content_top_in = 1.5
+                        content_width_in = max(slide_w_in - page_margin - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (1.5 + page_margin)
+                    elif pos == "right":
+                        img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
+                        img_top_in = 1.5
+                        content_left_in = page_margin
+                        content_top_in = 1.5
+                        content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (1.5 + page_margin)
+                    elif pos == "top":
+                        img_left_in = slide_w_in - page_margin - img_w_in
+                        img_top_in = page_margin
+                        content_left_in = page_margin
+                        content_top_in = img_top_in + img_h_in + gutter
+                        content_width_in = slide_w_in - 2*page_margin
+                        content_height_in = max(slide_h_in - page_margin - content_top_in, 2.0)
+                    elif pos == "bottom":
+                        img_left_in = slide_w_in - page_margin - img_w_in
+                        img_top_in = max(slide_h_in - page_margin - img_h_in, page_margin)
+                        content_left_in = page_margin
+                        content_top_in = 1.0
+                        content_width_in = slide_w_in - 2*page_margin
+                        content_height_in = max(img_top_in - gutter - content_top_in, 2.0)
+                    else:
+                        img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
+                        img_top_in = 1.5
+                        content_left_in = page_margin
+                        content_top_in = 1.5
+                        content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (1.5 + page_margin)
+
+                    slide.shapes.add_picture(stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
+                except Exception:
+                    pass
+
+        # apply content box geometry
+        try:
+            content_shape.left = Inches(content_left_in)
+            content_shape.top = Inches(content_top_in)
+            content_shape.width = Inches(content_width_in)
+            content_shape.height = Inches(content_height_in)
+        except Exception:
+            pass
+
+        # estimate capacity to guide initial font size; autosize will fine-tune
+        approx_chars_per_in = 9.5
+        approx_lines_per_in = 1.6
+        est_capacity = int(content_width_in * approx_chars_per_in * content_height_in * approx_lines_per_in)
+        font_size = dynamic_font_size(content_list, max_chars=max(est_capacity, 120), base_size=24, min_size=12)
+
+        if not tf.paragraphs:
+            tf.add_paragraph()
+        for idx, line in enumerate(content_list):
+            p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             run = p.add_run()
             run.text = line
             run.font.size = font_size
             run.font.name = "Calibri"
             p.space_after = Pt(6)
-
-        image_query = slide_data.get("image_query")
-        if image_query:
-            log.debug(f"Searching for image query: '{image_query}'")
-            image_url = search_image(image_query)
-            if image_url:
-                log.debug(f"Downloading image from URL: {image_url}")
-                image_data = requests.get(image_url).content
-                image_stream = BytesIO(image_data)
-                position = slide_data.get("image_position", "right")
-                size = slide_data.get("image_size", "medium")
-                if size == "small":
-                    width = Inches(2)
-                    height = Inches(1.5)
-                elif size == "large":
-                    width = Inches(4)
-                    height = Inches(3)
-                else:
-                    width = Inches(3)
-                    height = Inches(2)
-                if position == "left":
-                    left = Inches(0.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(4.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                elif position == "right":
-                    left = Inches(5.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                elif position == "top":
-                    left = Inches(5.5)
-                    top = Inches(0.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(2.5)
-                    content_shape.width = Inches(7)
-                    content_shape.height = Inches(3)
-                elif position == "bottom":
-                    left = Inches(5.5)
-                    top = Inches(4.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(0.5)
-                    content_shape.width = Inches(7)
-                    content_shape.height = Inches(3)
-                else:  
-                    left = Inches(5.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                slide.shapes.add_picture(image_stream, left, top, width, height)
-        else:
-            content_shape.left = Inches(0.5)
-            content_shape.top = Inches(1.5)
-            content_shape.width = Inches(7)
-            content_shape.height = Inches(4)
 
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
