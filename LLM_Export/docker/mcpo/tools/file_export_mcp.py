@@ -58,6 +58,8 @@ def search_image(query):
         return search_unsplash(query)
     elif image_source == "local_sd":
         return search_local_sd(query)
+    elif image_source == "pexels":
+        return search_pexels(query)
     else:
         log.warning(f"Image source unknown : {image_source}")
         return None
@@ -164,6 +166,38 @@ def search_unsplash(query):
         log.error(f"Network error while searching image for '{query}': {e}")
     except json.JSONDecodeError as e:
         log.error(f"Error decoding JSON from Unsplash for '{query}': {e}")
+    except Exception as e:
+        log.error(f"Unexpected error searching image for '{query}': {e}")
+    return None 
+def search_pexels(query):
+    log.debug(f"Searching Pexels for query: '{query}'")
+    api_key = os.getenv("PEXELS_ACCESS_KEY")
+    if not api_key:
+        log.warning("PEXELS_ACCESS_KEY is not set. Cannot search for images.")
+        return None
+    url = "https://api.pexels.com/v1/search"
+    params = {
+        "query": query,
+        "per_page": 1,
+        "orientation": "landscape"
+    }
+    headers = {"Authorization": f"{api_key}"}
+    log.debug(f"Sending request to Pexels API")
+    try:
+        response = requests.get(url, params=params, headers=headers)
+        log.debug(f"Pexels API response status: {response.status_code}")
+        response.raise_for_status() 
+        data = response.json()
+        if data.get("photos"):
+            image_url = data["photos"][0]["src"]["large"]
+            log.debug(f"Found image URL for '{query}': {image_url}")
+            return image_url
+        else:
+            log.debug(f"No results found on Pexels for query: '{query}'")
+    except requests.exceptions.RequestException as e:
+        log.error(f"Network error while searching image for '{query}': {e}")
+    except json.JSONDecodeError as e:
+        log.error(f"Error decoding JSON from Pexels for '{query}': {e}")
     except Exception as e:
         log.error(f"Unexpected error searching image for '{query}': {e}")
     return None
