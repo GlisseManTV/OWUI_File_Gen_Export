@@ -52,7 +52,7 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 
-DOCS_TEMPLATE_PATH= os.getenv("DOCS_TEMPLATE_PATH",None)
+DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_PATH", "/rootPath/templates")
 PPTX_TEMPLATE = None
 DOCX_TEMPLATE = None
 XLSX_TEMPLATE = None
@@ -74,10 +74,16 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     if PPTX_TEMPLATE_PATH:
         PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
         logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
-    # if DOCX_TEMPLATE_PATH:
-    #     #todo
-    # if XLSX_TEMPLATE_PATH:
-    #     #todo
+    ## next steps    
+    if DOCX_TEMPLATE_PATH:
+        from docx import Document
+        DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
+        logging.info(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+    
+    if XLSX_TEMPLATE_PATH:
+        from openpyxl import load_workbook
+        XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
+        logging.info(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
 
 
 
