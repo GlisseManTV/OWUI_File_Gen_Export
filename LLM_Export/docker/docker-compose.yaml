@@ -33,6 +33,7 @@ services:
       - LOCAL_SD_SCHEDULER=Karras
       - LOCAL_SD_SAMPLE=Euler a
       - DOCS_TEMPLATE_DIR=/docs_templates
+      - PEXELS_ACCESS_KEY=""
     ports:
       - "8000:8000"
     restart: unless-stopped

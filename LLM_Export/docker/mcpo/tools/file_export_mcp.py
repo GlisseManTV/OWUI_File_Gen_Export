@@ -208,6 +208,7 @@ def search_unsplash(query):
     except Exception as e:
         log.error(f"Unexpected error searching image for '{query}': {e}")
     return None 
+
 def search_pexels(query):
     log.debug(f"Searching Pexels for query: '{query}'")
     api_key = os.getenv("PEXELS_ACCESS_KEY")
@@ -717,13 +718,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
 
     if PPTX_TEMPLATE:
         try:
+            log.debug("Attempting to load template...")
             src = PPTX_TEMPLATE
             if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
+                log.debug("Template is a Presentation object, converting to BytesIO")
                 buf = BytesIO()
                 PPTX_TEMPLATE.save(buf); buf.seek(0)
                 src = buf
 
             tmp = Presentation(src)
+            log.debug(f"Template loaded with {len(tmp.slides)} slides")
             if len(tmp.slides) >= 1:
                 prs = tmp
                 use_template = True
@@ -732,6 +736,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
                 title_layout = prs.slides[0].slide_layout
                 content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
+                log.debug("Using template layouts")
 
                 # Keep only the first slide (as title base)
                 for i in range(len(prs.slides) - 1, 0, -1):
@@ -740,16 +745,19 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                     del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
             # else -> fall through to no-template
         except Exception:
+            log.error(f"Error loading template: {e}")
             use_template = False
             prs = None
 
     if not use_template:
+        log.debug("No valid template, creating new presentation with default layouts")
         prs = Presentation()
         title_layout = prs.slide_layouts[0]
         content_layout = prs.slide_layouts[1]
 
     # Title slide (either existing template title, or newly added)
     if use_template:
+        log.debug("Using template title slide")
         tslide = prs.slides[0]
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -757,6 +765,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 for r in p.runs:
                     r.font.size = Pt(28); r.font.bold = True
     else:
+        log.debug("Creating new title slide")
         tslide = prs.slides.add_slide(title_layout)
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -768,6 +777,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     EMU_PER_IN = 914400
     slide_w_in = prs.slide_width / EMU_PER_IN
     slide_h_in = prs.slide_height / EMU_PER_IN
+    log.debug(f"Slide dimensions: {slide_w_in} x {slide_h_in} inches")
 
     # shared margins/gutters
     page_margin = 0.5   # outer margin on each side (inches)
@@ -775,14 +785,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
 
     # --- shared path: add content slides ---
     for slide_data in slides_data:
+        log.debug(f"Processing slide {i+1}: {slide_data.get('title', 'Untitled')}")
         if not isinstance(slide_data, dict):
+            log.warning(f"Slide data is not a dict, skipping slide {i+1}")
             continue
 
         slide_title = slide_data.get("title", "Untitled")
         content_list = slide_data.get("content", [])
         if not isinstance(content_list, list):
             content_list = [content_list]
-
+        log.debug(f"Adding slide with title: '{slide_title}'")
         slide = prs.slides.add_slide(content_layout)
 
         # Title
@@ -809,8 +821,10 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                     except Exception:
                         pass
         except Exception:
+            log.error(f"Error finding content placeholder: {e}")
             pass
         if content_shape is None:
+            log.debug("Creating new textbox for content")
             content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(1.5), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - 2.0))
 
         # prep text frame: wrap + shrink-to-fit + small inner margins
@@ -818,6 +832,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         try:
             tf.clear()
         except Exception:
+            log.error(f"Error clearing text frame: {e}")
             pass
         tf.word_wrap = True
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
@@ -852,6 +867,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                         img_w_in, img_h_in = 4.0, 3.0
                     else:
                         img_w_in, img_h_in = 3.0, 2.0
+                    log.debug(f"Image dimensions: {img_w_in} x {img_h_in} inches")
 
                     if pos == "left":
                         img_left_in = page_margin
@@ -890,6 +906,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                         content_height_in = slide_h_in - (1.5 + page_margin)
 
                     slide.shapes.add_picture(image_stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
+                    log.debug(f"Image added at position: left={img_left_in}, top={img_top_in}")
                 except Exception:
                     pass
 
@@ -915,7 +932,6 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             run = p.add_run()
             run.text = line
             run.font.size = font_size
-            run.font.name = "Calibri"
             p.space_after = Pt(6)
 
     prs.save(filepath)
