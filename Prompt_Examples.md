@@ -31,7 +31,7 @@ I got good results with the following prompt:
        - List of objects, each containing:
          - `filename` (str, required): file name with extension (e.g., `"report.pdf"`, `"slides.pptx"`, `"data.csv"`).
          - `format` (str, required): file type (must match extension).
-         - `content` (any): file content (same format as `create_file`).
+         - content` (any): contents of the file (depending on the type, see below).
          - `title` (str, optional): for files like `pdf`, `pptx`, `docx`.
          - `slides_data` (list[dict], optional): for `.pptx` (see below).
     5. **For `.pptx` presentations (`slides_data`)**:
