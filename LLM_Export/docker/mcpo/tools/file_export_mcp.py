@@ -491,6 +491,46 @@ def _cleanup_files(folder_path: str, delay_minutes: int):
     thread = threading.Thread(target=delete_files)
     thread.start()
 
+def _convert_markdown_to_structured(markdown_content):
+    """
+    Converts Markdown content into a structured format for Word
+    
+    Args:
+        markdown_content (str): Markdown content
+        
+    Returns:
+        list: List of objects with 'text' and 'type'
+    """
+    if not markdown_content or not isinstance(markdown_content, str):
+        return []
+    
+    lines = markdown_content.split('\n')
+    structured = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        if line.startswith('# '):
+            structured.append({"text": line[2:].strip(), "type": "title"})
+        elif line.startswith('## '):
+            structured.append({"text": line[3:].strip(), "type": "heading"})
+        elif line.startswith('### '):
+            structured.append({"text": line[4:].strip(), "type": "subheading"})
+        elif line.startswith('#### '):
+            structured.append({"text": line[5:].strip(), "type": "subheading"})
+        elif line.startswith('- '):
+            structured.append({"text": line[2:].strip(), "type": "bullet"})
+        elif line.startswith('* '):
+            structured.append({"text": line[2:].strip(), "type": "bullet"})
+        elif line.startswith('**') and line.endswith('**'):
+            structured.append({"text": line[2:-2].strip(), "type": "bold"})
+        else:
+            structured.append({"text": line, "type": "paragraph"})
+    
+    return structured
+
 def _create_excel(data: list[list[str]], filename: str, folder_path: str | None = None) -> dict:
     log.debug("Creating Excel file")
     if folder_path is None:
@@ -693,8 +733,14 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
-def _create_word(content: list[dict], filename: str, folder_path: str | None = None) -> dict:
+def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None) -> dict:
     log.debug("Creating Word document")
+
+    if isinstance(content, str):
+        content = _convert_markdown_to_structured(content)
+    elif not isinstance(content, list):
+        content = []
+
     if folder_path is None:
         folder_path = _generate_unique_folder()
     if filename:
@@ -703,6 +749,7 @@ def _create_word(content: list[dict], filename: str, folder_path: str | None = N
         fname = filename
     else:
         filepath, fname = _generate_filename(folder_path, "docx")
+
     doc = Document()
     for item in content or []:
         if isinstance(item, str):

@@ -695,8 +695,14 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
-def _create_word(content: list[dict], filename: str, folder_path: str | None = None) -> dict:
+def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None) -> dict:
     log.debug("Creating Word document")
+
+    if isinstance(content, str):
+        content = _convert_markdown_to_structured(content)
+    elif not isinstance(content, list):
+        content = []
+
     if folder_path is None:
         folder_path = _generate_unique_folder()
     if filename:
