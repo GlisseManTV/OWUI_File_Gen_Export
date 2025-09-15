@@ -61,29 +61,30 @@ DOCX_TEMPLATE_PATH = None
 XLSX_TEMPLATE_PATH = None
 
 if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
+    logging.debug(f"Template Folder: {DOCS_TEMPLATE_PATH}")
     # Search for .pptx, .docx, .xlsx templates inside DOCS_TEMPLATE_PATH
     for root, dirs, files in os.walk(DOCS_TEMPLATE_PATH):
         for file in files:
             fpath = os.path.join(root, file)
             if file.lower().endswith(".pptx") and PPTX_TEMPLATE_PATH is None:
                 PPTX_TEMPLATE_PATH = fpath
+                logging.debug(f"PPTX template: {PPTX_TEMPLATE_PATH}")
             elif file.lower().endswith(".docx") and DOCX_TEMPLATE_PATH is None:
                 DOCX_TEMPLATE_PATH = fpath
             elif file.lower().endswith(".xlsx") and XLSX_TEMPLATE_PATH is None:
                 XLSX_TEMPLATE_PATH = fpath
     if PPTX_TEMPLATE_PATH:
         PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
-        logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
-    ## next steps    
+        logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
     if DOCX_TEMPLATE_PATH:
         from docx import Document
         DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
-        logging.info(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+        logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
     
     if XLSX_TEMPLATE_PATH:
         from openpyxl import load_workbook
         XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
-        logging.info(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
+        logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
 
 
 
