@@ -580,7 +580,6 @@ def _create_pdf(text: str | list[str], filename: str, folder_path: str | None = 
         doc.build(story)
     except Exception as e:
         log.error(f"Error building PDF {fname}: {e}", exc_info=True)
-        # fallback
         doc2 = SimpleDocTemplate(filepath)
         doc2.build([Paragraph("Error in PDF generation", styles["CustomNormal"])])
 
@@ -709,8 +708,7 @@ def _create_word(content: list[dict], filename: str, folder_path: str | None = N
         if isinstance(item, str):
             doc.add_paragraph(item)
         elif isinstance(item, dict):
-            t = item.get("type")            
-            if t == "image_query":
+            if item.get("type") == "image_query":
                 new_item = {
                     "type": "image",
                     "query": item.get("query")
@@ -726,29 +724,54 @@ def _create_word(content: list[dict], filename: str, folder_path: str | None = N
                         log.debug("Image successfully added")
                     else:
                         log.warning(f"Image search for : '{image_query}'")
-
-            elif t == "title":
-                p = doc.add_paragraph(item.get("text", ""))
-                p.style = doc.styles['Heading 1'] if 'Heading 1' in doc.styles else doc.styles['Normal']
-
-            elif t == "subtitle":
-                p = doc.add_paragraph(item.get("text", ""))
-                p.style = doc.styles['Heading 2'] if 'Heading 2' in doc.styles else doc.styles['Normal']
-            elif t == "paragraph":
-                doc.add_paragraph(item.get("text", ""))
-            elif t == "list":
-                for txt in item.get("items", []):
-                    p = doc.add_paragraph(txt)
-                    p.style = doc.styles['List Bullet'] if 'List Bullet' in doc.styles else doc.styles['Normal']
-
-            elif t == "image":
-                query = item.get("query")
-                if query:
-                    log.debug(f"Searching for image with query: '{query}'")
-                    image_url = search_image(query)
-                    if image_url:
-                        resp = requests.get(image_url)
-                        doc.add_picture(BytesIO(resp.content), width=Inches(6))
+            elif "type" in item:
+                item_type = item.get("type")
+                if item_type == "title":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 1']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    log.debug("Title added")
+                elif item_type == "subtitle":
+                    paragraph = doc.add_paragraph(item.get("text", ""))
+                    paragraph.style = doc.styles['Heading 2']
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    log.debug("Subtitle added")
+                elif item_type == "paragraph":
+                    doc.add_paragraph(item.get("text", ""))
+                    log.debug("Paragraph added")
+                elif item_type == "list":
+                    items = item.get("items", [])
+                    for i, item_text in enumerate(items):
+                        if i == 0:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                        else:
+                            paragraph = doc.add_paragraph(item_text)
+                            paragraph.style = doc.styles['List Bullet']
+                    log.debug("List added")
+                elif item_type == "image":
+                    image_query = item.get("query")
+                    if image_query:
+                        log.debug(f"Image search for the query : {image_query}")
+                        image_url = search_image(image_query)
+                        if image_url:
+                            response = requests.get(image_url)
+                            image_data = BytesIO(response.content)
+                            doc.add_picture(image_data, width=Inches(6))
+                            log.debug("Image successfully added")
+                        else:
+                            log.warning(f"Image search for : '{image_query}'")
+                elif item_type == "table":
+                    data = item.get("data", [])
+                    if data:
+                        table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                        for i, row in enumerate(data):
+                            for j, cell in enumerate(row):
+                                table.cell(i, j).text = str(cell)
+                        log.debug("Table added")
+            elif "text" in item:
+                doc.add_paragraph(item["text"])
+                log.debug("Paragraph added")
     doc.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
