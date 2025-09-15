@@ -52,11 +52,33 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 
-PPTX_TEMPLATE_PATH= os.getenv("PPTX_TEMPLATE_PATH",None)
+DOCS_TEMPLATE_PATH= os.getenv("DOCS_TEMPLATE_PATH",None)
 PPTX_TEMPLATE = None
-if PPTX_TEMPLATE_PATH and os.path.exists(PPTX_TEMPLATE_PATH):
-    PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
-    logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
+DOCX_TEMPLATE = None
+XLSX_TEMPLATE = None
+PPTX_TEMPLATE_PATH = None
+DOCX_TEMPLATE_PATH = None
+XLSX_TEMPLATE_PATH = None
+
+if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
+    # Search for .pptx, .docx, .xlsx templates inside DOCS_TEMPLATE_PATH
+    for root, dirs, files in os.walk(DOCS_TEMPLATE_PATH):
+        for file in files:
+            fpath = os.path.join(root, file)
+            if file.lower().endswith(".pptx") and PPTX_TEMPLATE_PATH is None:
+                PPTX_TEMPLATE_PATH = fpath
+            elif file.lower().endswith(".docx") and DOCX_TEMPLATE_PATH is None:
+                DOCX_TEMPLATE_PATH = fpath
+            elif file.lower().endswith(".xlsx") and XLSX_TEMPLATE_PATH is None:
+                XLSX_TEMPLATE_PATH = fpath
+    if PPTX_TEMPLATE_PATH:
+        PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
+        logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
+    # if DOCX_TEMPLATE_PATH:
+    #     #todo
+    # if XLSX_TEMPLATE_PATH:
+    #     #todo
+
 
 
 
