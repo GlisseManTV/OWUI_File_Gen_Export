@@ -26,7 +26,7 @@ from docx.oxml import parse_xml
 from docx.shared import Pt as DocxPt
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 import csv
 from pptx import Presentation
 from pptx.util import Inches
@@ -77,7 +77,7 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
                 XLSX_TEMPLATE_PATH = fpath
     if PPTX_TEMPLATE_PATH:
         try:
-            PPTX_TEMPLATE = Document(PPTX_TEMPLATE_PATH)
+            PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
             logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
         except Exception as e:
             logging.warning(f"PPTX template failed to load : {e}")
