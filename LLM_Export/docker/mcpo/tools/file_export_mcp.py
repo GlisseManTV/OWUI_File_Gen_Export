@@ -59,7 +59,7 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 
-DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_PATH", "/rootPath/templates")
+DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_DIR", "/rootPath/templates")
 PPTX_TEMPLATE = None
 DOCX_TEMPLATE = None
 XLSX_TEMPLATE = None
@@ -68,28 +68,29 @@ DOCX_TEMPLATE_PATH = None
 XLSX_TEMPLATE_PATH = None
 
 if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
+    logging.debug(f"Template Folder: {DOCS_TEMPLATE_PATH}")
     # Search for .pptx, .docx, .xlsx templates inside DOCS_TEMPLATE_PATH
     for root, dirs, files in os.walk(DOCS_TEMPLATE_PATH):
         for file in files:
             fpath = os.path.join(root, file)
             if file.lower().endswith(".pptx") and PPTX_TEMPLATE_PATH is None:
                 PPTX_TEMPLATE_PATH = fpath
+                logging.debug(f"PPTX template: {PPTX_TEMPLATE_PATH}")
             elif file.lower().endswith(".docx") and DOCX_TEMPLATE_PATH is None:
                 DOCX_TEMPLATE_PATH = fpath
             elif file.lower().endswith(".xlsx") and XLSX_TEMPLATE_PATH is None:
                 XLSX_TEMPLATE_PATH = fpath
     if PPTX_TEMPLATE_PATH:
         PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
-        logging.info(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
-    ## next steps    
+        logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
     if DOCX_TEMPLATE_PATH:
         DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
-        logging.info(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+        logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
     
     if XLSX_TEMPLATE_PATH:
         from openpyxl import load_workbook
         XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
-        logging.info(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
+        logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
 
 
 
@@ -102,6 +103,8 @@ def search_image(query):
         return search_unsplash(query)
     elif image_source == "local_sd":
         return search_local_sd(query)
+    elif image_source == "pexels":
+        return search_pexels(query)
     else:
         log.warning(f"Image source unknown : {image_source}")
         return None
@@ -208,6 +211,39 @@ def search_unsplash(query):
         log.error(f"Network error while searching image for '{query}': {e}")
     except json.JSONDecodeError as e:
         log.error(f"Error decoding JSON from Unsplash for '{query}': {e}")
+    except Exception as e:
+        log.error(f"Unexpected error searching image for '{query}': {e}")
+    return None 
+
+def search_pexels(query):
+    log.debug(f"Searching Pexels for query: '{query}'")
+    api_key = os.getenv("PEXELS_ACCESS_KEY")
+    if not api_key:
+        log.warning("PEXELS_ACCESS_KEY is not set. Cannot search for images.")
+        return None
+    url = "https://api.pexels.com/v1/search"
+    params = {
+        "query": query,
+        "per_page": 1,
+        "orientation": "landscape"
+    }
+    headers = {"Authorization": f"{api_key}"}
+    log.debug(f"Sending request to Pexels API")
+    try:
+        response = requests.get(url, params=params, headers=headers)
+        log.debug(f"Pexels API response status: {response.status_code}")
+        response.raise_for_status() 
+        data = response.json()
+        if data.get("photos"):
+            image_url = data["photos"][0]["src"]["large"]
+            log.debug(f"Found image URL for '{query}': {image_url}")
+            return image_url
+        else:
+            log.debug(f"No results found on Pexels for query: '{query}'")
+    except requests.exceptions.RequestException as e:
+        log.error(f"Network error while searching image for '{query}': {e}")
+    except json.JSONDecodeError as e:
+        log.error(f"Error decoding JSON from Pexels for '{query}': {e}")
     except Exception as e:
         log.error(f"Unexpected error searching image for '{query}': {e}")
     return None
@@ -686,13 +722,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
 
     if PPTX_TEMPLATE:
         try:
+            log.debug("Attempting to load template...")
             src = PPTX_TEMPLATE
             if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
+                log.debug("Template is a Presentation object, converting to BytesIO")
                 buf = BytesIO()
                 PPTX_TEMPLATE.save(buf); buf.seek(0)
                 src = buf
 
             tmp = Presentation(src)
+            log.debug(f"Template loaded with {len(tmp.slides)} slides")
             if len(tmp.slides) >= 1:
                 prs = tmp
                 use_template = True
@@ -701,6 +740,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
                 title_layout = prs.slides[0].slide_layout
                 content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
+                log.debug("Using template layouts")
 
                 # Keep only the first slide (as title base)
                 for i in range(len(prs.slides) - 1, 0, -1):
@@ -709,16 +749,19 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                     del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
             # else -> fall through to no-template
         except Exception:
+            log.error(f"Error loading template: {e}")
             use_template = False
             prs = None
 
     if not use_template:
+        log.debug("No valid template, creating new presentation with default layouts")
         prs = Presentation()
         title_layout = prs.slide_layouts[0]
         content_layout = prs.slide_layouts[1]
 
     # Title slide (either existing template title, or newly added)
     if use_template:
+        log.debug("Using template title slide")
         tslide = prs.slides[0]
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -726,6 +769,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 for r in p.runs:
                     r.font.size = PptPt(28); r.font.bold = True
     else:
+        log.debug("Creating new title slide")
         tslide = prs.slides.add_slide(title_layout)
         if tslide.shapes.title:
             tslide.shapes.title.text = title or ""
@@ -737,6 +781,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     EMU_PER_IN = 914400
     slide_w_in = prs.slide_width / EMU_PER_IN
     slide_h_in = prs.slide_height / EMU_PER_IN
+    log.debug(f"Slide dimensions: {slide_w_in} x {slide_h_in} inches")
 
     # shared margins/gutters
     page_margin = 0.5   # outer margin on each side (inches)
@@ -744,14 +789,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
 
     # --- shared path: add content slides ---
     for slide_data in slides_data:
+        log.debug(f"Processing slide {i+1}: {slide_data.get('title', 'Untitled')}")
         if not isinstance(slide_data, dict):
+            log.warning(f"Slide data is not a dict, skipping slide {i+1}")
             continue
 
         slide_title = slide_data.get("title", "Untitled")
         content_list = slide_data.get("content", [])
         if not isinstance(content_list, list):
             content_list = [content_list]
-
+        log.debug(f"Adding slide with title: '{slide_title}'")
         slide = prs.slides.add_slide(content_layout)
 
         # Title
@@ -778,6 +825,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                     except Exception:
                         pass
         except Exception:
+            log.error(f"Error finding content placeholder: {e}")
             pass
 
         # Calculate title bottom position for proper image placement
@@ -793,13 +841,15 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 title_bottom_in = 1.2  # fallback with padding
 
         if content_shape is None:
-            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(title_bottom_in), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - title_bottom_in - page_margin))
 
+            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(title_bottom_in), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - title_bottom_in - page_margin))
+            log.debug("Creating new textbox for content")
         # prep text frame: wrap + shrink-to-fit + small inner margins
         tf = content_shape.text_frame
         try:
             tf.clear()
         except Exception:
+            log.error(f"Error clearing text frame: {e}")
             pass
         tf.word_wrap = True
         tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
@@ -836,6 +886,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                         img_w_in, img_h_in = 4.0, 3.0
                     else:
                         img_w_in, img_h_in = 3.0, 2.0
+                    log.debug(f"Image dimensions: {img_w_in} x {img_h_in} inches")
 
                     if pos == "left":
                         img_left_in = page_margin
@@ -874,6 +925,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                         content_height_in = slide_h_in - (title_bottom_in + page_margin)
 
                     slide.shapes.add_picture(image_stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
+                    log.debug(f"Image added at position: left={img_left_in}, top={img_top_in}")
                 except Exception:
                     pass
 
@@ -913,8 +965,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             run = p.add_run()
             run.text = str(line) if line is not None else ""
             run.font.size = font_size
-            run.font.name = "Calibri"
-            p.space_after = PptPt(6)
+            p.space_after = Pt(6)
 
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
