@@ -94,7 +94,6 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         DOCX_TEMPLATE = None
     
     if XLSX_TEMPLATE_PATH:
-        from openpyxl import load_workbook
         XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
         logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
 
@@ -1002,7 +1001,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
             src = DOCX_TEMPLATE
             if hasattr(DOCX_TEMPLATE, "paragraphs") and hasattr(DOCX_TEMPLATE, "save"):
                 # If DOCX_TEMPLATE is already a Document object, create a copy
-                from io import BytesIO
                 buf = BytesIO()
                 DOCX_TEMPLATE.save(buf)
                 buf.seek(0)
