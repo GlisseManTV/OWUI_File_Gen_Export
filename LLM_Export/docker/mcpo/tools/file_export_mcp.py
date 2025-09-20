@@ -93,8 +93,11 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         DOCX_TEMPLATE = None
 
     if XLSX_TEMPLATE_PATH:
-        XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
-        logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
+        try:
+            XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
+        except Exception as e:
+            log.warning(f"Failed to load XLSX template: {e}")
+            XLSX_TEMPLATE = None
 
 
 
@@ -616,9 +619,10 @@ def _convert_markdown_to_structured(markdown_content):
     return structured
 
 def _create_excel(data: list[list[str]], filename: str, folder_path: str | None = None) -> dict:
-    log.debug("Creating Excel file")
+    log.debug("Creating Excel file with optional template")
     if folder_path is None:
         folder_path = _generate_unique_folder()
+    
     if filename:
         filepath = os.path.join(folder_path, filename)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -626,14 +630,33 @@ def _create_excel(data: list[list[str]], filename: str, folder_path: str | None 
     else:
         filepath, fname = _generate_filename(folder_path, "xlsx")
 
-    wb = Workbook()
-    ws = wb.active
+    # Utilisation du template si défini
+    if XLSX_TEMPLATE:
+        try:
+            log.debug("Loading XLSX template...")
+            # Charger le template existant
+            wb = load_workbook(XLSX_TEMPLATE_PATH)  # Chargement du template depuis le chemin défini
+            ws = wb.active
+            log.debug(f"Template loaded with {len(wb.sheetnames)} sheet(s)")
+        except Exception as e:
+            log.warning(f"Failed to load XLSX template: {e}")
+            # Si échec, créer un nouveau classeur vide
+            wb = Workbook()
+            ws = wb.active
+    else:
+        log.debug("No XLSX template available, creating new workbook")
+        wb = Workbook()
+        ws = wb.active
+
+    # Écrire les données
     if isinstance(data, list):
         for row in data:
             ws.append(row)
-    wb.save(filepath)
-    return {"url": _public_url(folder_path, fname), "path": filepath}
 
+    # Sauvegarder
+    wb.save(filepath)
+
+    return {"url": _public_url(folder_path, fname), "path": filepath}
 def _create_csv(data: list[list[str]], filename: str, folder_path: str | None = None) -> dict:
     log.debug("Creating CSV file")
     if folder_path is None:
