@@ -79,8 +79,16 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
             elif file.lower().endswith(".xlsx") and XLSX_TEMPLATE_PATH is None:
                 XLSX_TEMPLATE_PATH = fpath
     if PPTX_TEMPLATE_PATH:
-        PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
-        logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
+        try:
+            PPTX_TEMPLATE = Document(PPTX_TEMPLATE_PATH)
+            logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
+        except Exception as e:
+            logging.warning(f"PPTX template failed to load : {e}")
+            PPTX_TEMPLATE = None
+    else:
+        logging.debug("No PPTX template found. Creation of a blank document.")
+        PPTX_TEMPLATE = None
+
     if DOCX_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         try:
             DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
@@ -98,6 +106,9 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         except Exception as e:
             log.warning(f"Failed to load XLSX template: {e}")
             XLSX_TEMPLATE = None
+    else:
+        logging.debug("No XLSX template found. Creation of a blank document.")
+        XLSX_TEMPLATE = None
 
 
 
@@ -630,17 +641,14 @@ def _create_excel(data: list[list[str]], filename: str, folder_path: str | None 
     else:
         filepath, fname = _generate_filename(folder_path, "xlsx")
 
-    # Utilisation du template si défini
     if XLSX_TEMPLATE:
         try:
             log.debug("Loading XLSX template...")
-            # Charger le template existant
-            wb = load_workbook(XLSX_TEMPLATE_PATH)  # Chargement du template depuis le chemin défini
+            wb = load_workbook(XLSX_TEMPLATE_PATH) 
             ws = wb.active
             log.debug(f"Template loaded with {len(wb.sheetnames)} sheet(s)")
         except Exception as e:
             log.warning(f"Failed to load XLSX template: {e}")
-            # Si échec, créer un nouveau classeur vide
             wb = Workbook()
             ws = wb.active
     else:
@@ -648,12 +656,10 @@ def _create_excel(data: list[list[str]], filename: str, folder_path: str | None 
         wb = Workbook()
         ws = wb.active
 
-    # Écrire les données
     if isinstance(data, list):
         for row in data:
             ws.append(row)
 
-    # Sauvegarder
     wb.save(filepath)
 
     return {"url": _public_url(folder_path, fname), "path": filepath}
