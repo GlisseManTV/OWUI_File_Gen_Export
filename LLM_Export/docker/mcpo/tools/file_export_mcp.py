@@ -20,12 +20,18 @@ from PIL import Image
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+from docx.oxml.shared import qn
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
+from docx.shared import Pt as DocxPt
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches
+from pptx.util import Pt as PptPt
 from pptx.parts.image import Image
 from pptx.enum.text import MSO_AUTO_SIZE
 from io import BytesIO
@@ -34,6 +40,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.units import mm
+
 
 PERSISTENT_FILES = os.getenv("PERSISTENT_FILES", "false")
 FILES_DELAY = int(os.getenv("FILES_DELAY", 60)) 
@@ -77,7 +84,6 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
         logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
     if DOCX_TEMPLATE_PATH:
-        from docx import Document
         DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
         logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
     
@@ -267,10 +273,10 @@ def dynamic_font_size(content_list, max_chars=400, base_size=28, min_size=12):
     total_chars = sum(len(line) for line in content_list)
     ratio = total_chars / max_chars if max_chars > 0 else 1
     if ratio <= 1:
-        return Pt(base_size)
+        return PptPt(base_size)
     else:
         new_size = int(base_size / ratio)
-        return Pt(max(min_size, new_size))
+        return PptPt(max(min_size, new_size))
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -763,7 +769,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             tslide.shapes.title.text = title or ""
             for p in tslide.shapes.title.text_frame.paragraphs:
                 for r in p.runs:
-                    r.font.size = Pt(28); r.font.bold = True
+                    r.font.size = PptPt(28); r.font.bold = True
     else:
         log.debug("Creating new title slide")
         tslide = prs.slides.add_slide(title_layout)
@@ -771,7 +777,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             tslide.shapes.title.text = title or ""
             for p in tslide.shapes.title.text_frame.paragraphs:
                 for r in p.runs:
-                    r.font.size = Pt(28); r.font.bold = True
+                    r.font.size = PptPt(28); r.font.bold = True
 
     # slide size in inches (for robust layout math)
     EMU_PER_IN = 914400
@@ -802,7 +808,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             slide.shapes.title.text = slide_title
             for p in slide.shapes.title.text_frame.paragraphs:
                 for r in p.runs:
-                    r.font.size = Pt(28); r.font.bold = True
+                    r.font.size = PptPt(28); r.font.bold = True
 
         # Find or create a content shape
         content_shape = None
@@ -937,7 +943,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
-def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None) -> dict:
+def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None, title: str | None = None) -> dict:
     log.debug("Creating Word document")
 
     if isinstance(content, str):
@@ -954,7 +960,59 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
     else:
         filepath, fname = _generate_filename(folder_path, "docx")
 
-    doc = Document()
+    # Template handling similar to create_presentation
+    use_template = False
+    doc = None
+
+    if DOCX_TEMPLATE:
+        try:
+            src = DOCX_TEMPLATE
+            if hasattr(DOCX_TEMPLATE, "paragraphs") and hasattr(DOCX_TEMPLATE, "save"):
+                # If DOCX_TEMPLATE is already a Document object, create a copy
+                from io import BytesIO
+                buf = BytesIO()
+                DOCX_TEMPLATE.save(buf)
+                buf.seek(0)
+                src = buf
+
+            # Load template document
+            doc = Document(src)
+            use_template = True
+            log.debug("Using DOCX template")
+
+            # Properly clear existing content while preserving styles
+            # Remove all paragraphs and tables
+            for element in doc.element.body:
+                if element.tag.endswith('}p') or element.tag.endswith('}tbl'):
+                    doc.element.body.remove(element)
+
+        except Exception as e:
+            log.warning(f"Failed to load DOCX template: {e}")
+            use_template = False
+            doc = None
+
+    if not use_template:
+        doc = Document()
+        log.debug("Creating new Word document without template")
+
+    # Add title if provided
+    if title:
+        title_paragraph = doc.add_paragraph(title)
+        try:
+            title_paragraph.style = doc.styles['Title']
+        except KeyError:
+            # Fallback if template doesn't have Title style
+            try:
+                title_paragraph.style = doc.styles['Heading 1']
+            except KeyError:
+                # Manual formatting if no built-in styles available
+                run = title_paragraph.runs[0] if title_paragraph.runs else title_paragraph.add_run()
+                run.font.size = DocxPt(20)
+                run.font.bold = True
+        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        log.debug("Document title added")
+
+    # Add content to document
     for item in content or []:
         if isinstance(item, str):
             doc.add_paragraph(item)
@@ -979,12 +1037,24 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 item_type = item.get("type")
                 if item_type == "title":
                     paragraph = doc.add_paragraph(item.get("text", ""))
-                    paragraph.style = doc.styles['Heading 1']
+                    try:
+                        paragraph.style = doc.styles['Heading 1']
+                    except KeyError:
+                        # Fallback if template doesn't have Heading 1 style
+                        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+                        run.font.size = DocxPt(18)
+                        run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     log.debug("Title added")
                 elif item_type == "subtitle":
                     paragraph = doc.add_paragraph(item.get("text", ""))
-                    paragraph.style = doc.styles['Heading 2']
+                    try:
+                        paragraph.style = doc.styles['Heading 2']
+                    except KeyError:
+                        # Fallback if template doesn't have Heading 2 style
+                        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+                        run.font.size = DocxPt(16)
+                        run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     log.debug("Subtitle added")
                 elif item_type == "paragraph":
@@ -993,12 +1063,12 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 elif item_type == "list":
                     items = item.get("items", [])
                     for i, item_text in enumerate(items):
-                        if i == 0:
-                            paragraph = doc.add_paragraph(item_text)
+                        paragraph = doc.add_paragraph(item_text)
+                        try:
                             paragraph.style = doc.styles['List Bullet']
-                        else:
-                            paragraph = doc.add_paragraph(item_text)
-                            paragraph.style = doc.styles['List Bullet']
+                        except KeyError:
+                            # Fallback if template doesn't have List Bullet style
+                            paragraph.style = doc.styles['Normal']
                     log.debug("List added")
                 elif item_type == "image":
                     image_query = item.get("query")
@@ -1015,14 +1085,72 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 elif item_type == "table":
                     data = item.get("data", [])
                     if data:
+                        # Check if template has existing tables to copy style from
+                        template_table_style = None
+                        if use_template and DOCX_TEMPLATE:
+                            try:
+                                # Look for existing tables in the original template
+                                for table in DOCX_TEMPLATE.tables:
+                                    if table.style:
+                                        template_table_style = table.style
+                                        break
+                            except Exception:
+                                pass
+                        
                         table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                        
+                        # Apply template table style
+                        if template_table_style:
+                            try:
+                                table.style = template_table_style
+                                log.debug(f"Applied template table style: {template_table_style.name}")
+                            except Exception as e:
+                                log.debug(f"Could not apply template table style: {e}")
+                        else:
+                            # Try to apply a built-in table style
+                            try:
+                                # Try common built-in styles
+                                for style_name in ['Table Grid', 'Light Grid Accent 1', 'Medium Grid 1 Accent 1', 'Light List Accent 1']:
+                                    try:
+                                        table.style = doc.styles[style_name]
+                                        log.debug(f"Applied built-in table style: {style_name}")
+                                        break
+                                    except KeyError:
+                                        continue
+                            except Exception as e:
+                                log.debug(f"Could not apply any table style: {e}")
+                        
+                        # Fill table data
                         for i, row in enumerate(data):
                             for j, cell in enumerate(row):
-                                table.cell(i, j).text = str(cell)
-                        log.debug("Table added")
+                                cell_obj = table.cell(i, j)
+                                cell_obj.text = str(cell)
+                                
+                                # Apply header formatting to first row
+                                if i == 0:
+                                    for paragraph in cell_obj.paragraphs:
+                                        for run in paragraph.runs:
+                                            run.font.bold = True
+                                        # Center align header text
+                                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        
+                        # Additional table formatting if no style was applied
+                        if not template_table_style:
+                            try:
+                                
+                                # Add borders to table
+                                tbl = table._tbl
+                                tblPr = tbl.tblPr
+                                tblBorders = parse_xml(r'<w:tblBorders {}><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>'.format(nsdecls('w')))
+                                tblPr.append(tblBorders)
+                            except Exception as e:
+                                log.debug(f"Could not add table borders: {e}")
+                        
+                        log.debug("Table added with improved styling")
             elif "text" in item:
                 doc.add_paragraph(item["text"])
                 log.debug("Paragraph added")
+    
     doc.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
@@ -1070,7 +1198,7 @@ def create_file(data: dict, persistent: bool = PERSISTENT_FILES) -> dict:
     elif format_type == "pptx":
         result = _create_presentation(data.get("slides_data", []), filename, folder_path=folder_path, title=title)
     elif format_type == "docx":
-        result = _create_word(content if content is not None else [], filename, folder_path=folder_path)
+        result = _create_word(content if content is not None else [], filename, folder_path=folder_path, title=title)
     elif format_type == "xlsx":
         result = _create_excel(content if content is not None else [], filename, folder_path=folder_path)
     elif format_type == "csv":
@@ -1109,7 +1237,7 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
             elif fmt == "pptx":
                 res = _create_presentation(file_info.get("slides_data", []), fname, folder_path=folder_path, title=title)
             elif fmt == "docx":
-                res = _create_word(content if content is not None else [], fname, folder_path=folder_path)
+                res = _create_word(content if content is not None else [], fname, folder_path=folder_path, title=title)
             elif fmt == "xlsx":
                 res = _create_excel(content if content is not None else [], fname, folder_path=folder_path)
             elif fmt == "csv":
