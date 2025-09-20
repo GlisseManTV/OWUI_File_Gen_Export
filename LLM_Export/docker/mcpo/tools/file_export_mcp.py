@@ -68,7 +68,6 @@ XLSX_TEMPLATE_PATH = None
 
 if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     logging.debug(f"Template Folder: {DOCS_TEMPLATE_PATH}")
-    # Search for .pptx, .docx, .xlsx templates inside DOCS_TEMPLATE_PATH
     for root, dirs, files in os.walk(DOCS_TEMPLATE_PATH):
         for file in files:
             fpath = os.path.join(root, file)
@@ -92,7 +91,7 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     else:
         logging.debug("No DOCX template found. Creation of a blank document.")
         DOCX_TEMPLATE = None
-    
+
     if XLSX_TEMPLATE_PATH:
         XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
         logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
@@ -741,18 +740,14 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 prs = tmp
                 use_template = True
 
-                # If the template has 2+ slides: slide 0 = title layout, slide 1 = content layout
-                # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
                 title_layout = prs.slides[0].slide_layout
                 content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
                 log.debug("Using template layouts")
 
-                # Keep only the first slide (as title base)
                 for i in range(len(prs.slides) - 1, 0, -1):
-                    rId = prs.slides._sldIdLst[i].rId  # type: ignore[attr-defined]
+                    rId = prs.slides._sldIdLst[i].rId 
                     prs.part.drop_rel(rId)
-                    del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
-            # else -> fall through to no-template
+                    del prs.slides._sldIdLst[i]
         except Exception:
             log.error(f"Error loading template: {e}")
             use_template = False
@@ -764,7 +759,6 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         title_layout = prs.slide_layouts[0]
         content_layout = prs.slide_layouts[1]
 
-    # Title slide (either existing template title, or newly added)
     if use_template:
         log.debug("Using template title slide")
         tslide = prs.slides[0]
@@ -782,17 +776,14 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 for r in p.runs:
                     r.font.size = PptPt(28); r.font.bold = True
 
-    # slide size in inches (for robust layout math)
     EMU_PER_IN = 914400
     slide_w_in = prs.slide_width / EMU_PER_IN
     slide_h_in = prs.slide_height / EMU_PER_IN
     log.debug(f"Slide dimensions: {slide_w_in} x {slide_h_in} inches")
 
-    # shared margins/gutters
-    page_margin = 0.5   # outer margin on each side (inches)
-    gutter = 0.3        # space between image and text (inches)
+    page_margin = 0.5
+    gutter = 0.3
 
-    # --- shared path: add content slides ---
     for i, slide_data in enumerate(slides_data):
         log.debug(f"Processing slide {i+1}: {slide_data.get('title', 'Untitled')}")
         if not isinstance(slide_data, dict):
@@ -806,14 +797,12 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         log.debug(f"Adding slide with title: '{slide_title}'")
         slide = prs.slides.add_slide(content_layout)
 
-        # Title
         if slide.shapes.title:
             slide.shapes.title.text = slide_title
             for p in slide.shapes.title.text_frame.paragraphs:
                 for r in p.runs:
                     r.font.size = PptPt(28); r.font.bold = True
 
-        # Find or create a content shape
         content_shape = None
         try:
             for ph in slide.placeholders:
@@ -833,23 +822,19 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             log.error(f"Error finding content placeholder: {e}")
             pass
 
-        # Calculate title bottom position for proper image placement
-        title_bottom_in = 1.0  # default fallback
+        title_bottom_in = 1.0 
         if slide.shapes.title:
             try:
-                # Convert EMU to inches for title bottom position
                 title_bottom_emu = slide.shapes.title.top + slide.shapes.title.height
                 title_bottom_in = max(title_bottom_emu / EMU_PER_IN, 1.0)
-                # Add small padding below title
                 title_bottom_in += 0.2
             except Exception:
-                title_bottom_in = 1.2  # fallback with padding
+                title_bottom_in = 1.2 
 
         if content_shape is None:
 
             content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(title_bottom_in), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - title_bottom_in - page_margin))
             log.debug("Creating new textbox for content")
-        # prep text frame: wrap + shrink-to-fit + small inner margins
         tf = content_shape.text_frame
         try:
             tf.clear()
@@ -866,12 +851,10 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         except Exception:
             pass
 
-        # default content box (will adjust if image present)
         content_left_in, content_top_in = page_margin, title_bottom_in
         content_width_in = slide_w_in - 2*page_margin
         content_height_in = slide_h_in - (title_bottom_in + page_margin)
 
-        # Optional image placement with proper content reflow
         image_query = slide_data.get("image_query")
         if image_query:
             image_url = search_image(image_query)
@@ -934,7 +917,6 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 except Exception:
                     pass
 
-        # apply content box geometry
         try:
             content_shape.left = Inches(content_left_in)
             content_shape.top = Inches(content_top_in)
@@ -943,20 +925,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         except Exception:
             pass
 
-        # estimate capacity to guide initial font size; autosize will fine-tune
         approx_chars_per_in = 9.5
         approx_lines_per_in = 1.6
-        # Ensure positive dimensions to avoid calculation issues
         safe_width = max(content_width_in, 0.1)
         safe_height = max(content_height_in, 0.1)
         est_capacity = int(safe_width * approx_chars_per_in * safe_height * approx_lines_per_in)
         font_size = dynamic_font_size(content_list, max_chars=max(est_capacity, 120), base_size=24, min_size=12)
 
-        # Ensure we still have a valid text frame after geometry changes
         try:
             tf = content_shape.text_frame
         except Exception:
-            # If text frame access fails, try to recreate
             try:
                 tf = content_shape.text_frame
             except Exception:
@@ -992,7 +970,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
     else:
         filepath, fname = _generate_filename(folder_path, "docx")
 
-    # Template handling similar to create_presentation
     use_template = False
     doc = None
 
@@ -1000,19 +977,15 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
         try:
             src = DOCX_TEMPLATE
             if hasattr(DOCX_TEMPLATE, "paragraphs") and hasattr(DOCX_TEMPLATE, "save"):
-                # If DOCX_TEMPLATE is already a Document object, create a copy
                 buf = BytesIO()
                 DOCX_TEMPLATE.save(buf)
                 buf.seek(0)
                 src = buf
 
-            # Load template document
             doc = Document(src)
             use_template = True
             log.debug("Using DOCX template")
 
-            # Properly clear existing content while preserving styles
-            # Remove all paragraphs and tables
             for element in doc.element.body:
                 if element.tag.endswith('}p') or element.tag.endswith('}tbl'):
                     doc.element.body.remove(element)
@@ -1026,24 +999,20 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
         doc = Document()
         log.debug("Creating new Word document without template")
 
-    # Add title if provided
     if title:
         title_paragraph = doc.add_paragraph(title)
         try:
             title_paragraph.style = doc.styles['Title']
         except KeyError:
-            # Fallback if template doesn't have Title style
             try:
                 title_paragraph.style = doc.styles['Heading 1']
             except KeyError:
-                # Manual formatting if no built-in styles available
                 run = title_paragraph.runs[0] if title_paragraph.runs else title_paragraph.add_run()
                 run.font.size = DocxPt(20)
                 run.font.bold = True
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         log.debug("Document title added")
 
-    # Add content to document
     for item in content or []:
         if isinstance(item, str):
             doc.add_paragraph(item)
@@ -1071,7 +1040,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                     try:
                         paragraph.style = doc.styles['Heading 1']
                     except KeyError:
-                        # Fallback if template doesn't have Heading 1 style
                         run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
                         run.font.size = DocxPt(18)
                         run.font.bold = True
@@ -1082,7 +1050,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                     try:
                         paragraph.style = doc.styles['Heading 2']
                     except KeyError:
-                        # Fallback if template doesn't have Heading 2 style
                         run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
                         run.font.size = DocxPt(16)
                         run.font.bold = True
@@ -1098,7 +1065,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                         try:
                             paragraph.style = doc.styles['List Bullet']
                         except KeyError:
-                            # Fallback if template doesn't have List Bullet style
                             paragraph.style = doc.styles['Normal']
                     log.debug("List added")
                 elif item_type == "image":
@@ -1116,11 +1082,9 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 elif item_type == "table":
                     data = item.get("data", [])
                     if data:
-                        # Check if template has existing tables to copy style from
                         template_table_style = None
                         if use_template and DOCX_TEMPLATE:
                             try:
-                                # Look for existing tables in the original template
                                 for table in DOCX_TEMPLATE.tables:
                                     if table.style:
                                         template_table_style = table.style
@@ -1130,7 +1094,6 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                         
                         table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
                         
-                        # Apply template table style
                         if template_table_style:
                             try:
                                 table.style = template_table_style
@@ -1138,9 +1101,7 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                             except Exception as e:
                                 log.debug(f"Could not apply template table style: {e}")
                         else:
-                            # Try to apply a built-in table style
                             try:
-                                # Try common built-in styles
                                 for style_name in ['Table Grid', 'Light Grid Accent 1', 'Medium Grid 1 Accent 1', 'Light List Accent 1']:
                                     try:
                                         table.style = doc.styles[style_name]
@@ -1151,26 +1112,20 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                             except Exception as e:
                                 log.debug(f"Could not apply any table style: {e}")
                         
-                        # Fill table data
                         for i, row in enumerate(data):
                             for j, cell in enumerate(row):
                                 cell_obj = table.cell(i, j)
                                 cell_obj.text = str(cell)
                                 
-                                # Apply header formatting to first row
                                 if i == 0:
                                     for paragraph in cell_obj.paragraphs:
                                         for run in paragraph.runs:
                                             run.font.bold = True
-                                        # Center align header text
                                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         
-                        # Additional table formatting if no style was applied
                         if not template_table_style:
                             try:
-                                
-                                # Add borders to table
-                                tbl = table._tbl
+                                                                tbl = table._tbl
                                 tblPr = tbl.tblPr
                                 tblBorders = parse_xml(r'<w:tblBorders {}><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>'.format(nsdecls('w')))
                                 tblPr.append(tblBorders)
