@@ -20,15 +20,21 @@ from PIL import Image
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.shared import qn
+from docx.oxml.ns import nsdecls
+from docx.oxml import parse_xml
+from docx.shared import Pt as DocxPt
 from bs4 import BeautifulSoup, NavigableString
 from mcp.server.fastmcp import FastMCP
 from openpyxl import Workbook
 import csv
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches
+from pptx.util import Pt as PptPt
 from pptx.parts.image import Image
+from pptx.enum.text import MSO_AUTO_SIZE
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image as ReportLabImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -52,6 +58,43 @@ LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
 
+
+DOCS_TEMPLATE_PATH = (os.getenv("DOCS_TEMPLATE_DIR") or os.path.join(DEFAULT_PATH_ENV, "output")).rstrip("/"))
+PPTX_TEMPLATE = None
+DOCX_TEMPLATE = None
+XLSX_TEMPLATE = None
+PPTX_TEMPLATE_PATH = None
+DOCX_TEMPLATE_PATH = None
+XLSX_TEMPLATE_PATH = None
+
+if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
+    logging.debug(f"Template Folder: {DOCS_TEMPLATE_PATH}")
+    # Search for .pptx, .docx, .xlsx templates inside DOCS_TEMPLATE_PATH
+    for root, dirs, files in os.walk(DOCS_TEMPLATE_PATH):
+        for file in files:
+            fpath = os.path.join(root, file)
+            if file.lower().endswith(".pptx") and PPTX_TEMPLATE_PATH is None:
+                PPTX_TEMPLATE_PATH = fpath
+                logging.debug(f"PPTX template: {PPTX_TEMPLATE_PATH}")
+            elif file.lower().endswith(".docx") and DOCX_TEMPLATE_PATH is None:
+                DOCX_TEMPLATE_PATH = fpath
+            elif file.lower().endswith(".xlsx") and XLSX_TEMPLATE_PATH is None:
+                XLSX_TEMPLATE_PATH = fpath
+    if PPTX_TEMPLATE_PATH:
+        PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
+        logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
+    if DOCX_TEMPLATE_PATH:
+        DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
+        logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+    
+    if XLSX_TEMPLATE_PATH:
+        from openpyxl import load_workbook
+        XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
+        logging.debug(f"Using XLSX template: {XLSX_TEMPLATE_PATH}")
+
+
+
+
 def search_image(query):
     log.debug(f"Searching for image with query: '{query}'")
     image_source = os.getenv("IMAGE_SOURCE", "unsplash")
@@ -60,6 +103,8 @@ def search_image(query):
         return search_unsplash(query)
     elif image_source == "local_sd":
         return search_local_sd(query)
+    elif image_source == "pexels":
+        return search_pexels(query)
     else:
         log.warning(f"Image source unknown : {image_source}")
         return None
@@ -168,6 +213,39 @@ def search_unsplash(query):
         log.error(f"Error decoding JSON from Unsplash for '{query}': {e}")
     except Exception as e:
         log.error(f"Unexpected error searching image for '{query}': {e}")
+    return None 
+
+def search_pexels(query):
+    log.debug(f"Searching Pexels for query: '{query}'")
+    api_key = os.getenv("PEXELS_ACCESS_KEY")
+    if not api_key:
+        log.warning("PEXELS_ACCESS_KEY is not set. Cannot search for images.")
+        return None
+    url = "https://api.pexels.com/v1/search"
+    params = {
+        "query": query,
+        "per_page": 1,
+        "orientation": "landscape"
+    }
+    headers = {"Authorization": f"{api_key}"}
+    log.debug(f"Sending request to Pexels API")
+    try:
+        response = requests.get(url, params=params, headers=headers)
+        log.debug(f"Pexels API response status: {response.status_code}")
+        response.raise_for_status() 
+        data = response.json()
+        if data.get("photos"):
+            image_url = data["photos"][0]["src"]["large"]
+            log.debug(f"Found image URL for '{query}': {image_url}")
+            return image_url
+        else:
+            log.debug(f"No results found on Pexels for query: '{query}'")
+    except requests.exceptions.RequestException as e:
+        log.error(f"Network error while searching image for '{query}': {e}")
+    except json.JSONDecodeError as e:
+        log.error(f"Error decoding JSON from Pexels for '{query}': {e}")
+    except Exception as e:
+        log.error(f"Unexpected error searching image for '{query}': {e}")
     return None
 
 def _resolve_log_level(val: str | None) -> int:
@@ -195,10 +273,10 @@ def dynamic_font_size(content_list, max_chars=400, base_size=28, min_size=12):
     total_chars = sum(len(line) for line in content_list)
     ratio = total_chars / max_chars if max_chars > 0 else 1
     if ratio <= 1:
-        return Pt(base_size)
+        return PptPt(base_size)
     else:
         new_size = int(base_size / ratio)
-        return Pt(max(min_size, new_size))
+        return PptPt(max(min_size, new_size))
 
 def _public_url(folder_path: str, filename: str) -> str:
     """Build a stable public URL for a generated file."""
@@ -493,6 +571,46 @@ def _cleanup_files(folder_path: str, delay_minutes: int):
     thread = threading.Thread(target=delete_files)
     thread.start()
 
+def _convert_markdown_to_structured(markdown_content):
+    """
+    Converts Markdown content into a structured format for Word
+    
+    Args:
+        markdown_content (str): Markdown content
+        
+    Returns:
+        list: List of objects with 'text' and 'type'
+    """
+    if not markdown_content or not isinstance(markdown_content, str):
+        return []
+    
+    lines = markdown_content.split('\n')
+    structured = []
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        if line.startswith('# '):
+            structured.append({"text": line[2:].strip(), "type": "title"})
+        elif line.startswith('## '):
+            structured.append({"text": line[3:].strip(), "type": "heading"})
+        elif line.startswith('### '):
+            structured.append({"text": line[4:].strip(), "type": "subheading"})
+        elif line.startswith('#### '):
+            structured.append({"text": line[5:].strip(), "type": "subheading"})
+        elif line.startswith('- '):
+            structured.append({"text": line[2:].strip(), "type": "bullet"})
+        elif line.startswith('* '):
+            structured.append({"text": line[2:].strip(), "type": "bullet"})
+        elif line.startswith('**') and line.endswith('**'):
+            structured.append({"text": line[2:-2].strip(), "type": "bold"})
+        else:
+            structured.append({"text": line, "type": "paragraph"})
+    
+    return structured
+
 def _create_excel(data: list[list[str]], filename: str, folder_path: str | None = None) -> dict:
     log.debug("Creating Excel file")
     if folder_path is None:
@@ -588,7 +706,6 @@ def _create_pdf(text: str | list[str], filename: str, folder_path: str | None = 
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
 def _create_presentation(slides_data: list[dict], filename: str, folder_path: str | None = None, title: str | None = None) -> dict:
-    log.debug("Creating PowerPoint presentation")
     if folder_path is None:
         folder_path = _generate_unique_folder()
     if filename:
@@ -597,105 +714,263 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         fname = filename
     else:
         filepath, fname = _generate_filename(folder_path, "pptx")
-    prs = Presentation()
-    title_slide_layout = prs.slide_layouts[0]
-    slide = prs.slides.add_slide(title_slide_layout)
-    slide.shapes.title.text = title or "Presentation"
-    for slide_data in slides_data or []:
+      
+    use_template = False
+    prs = None
+    title_layout = None
+    content_layout = None
+
+    if PPTX_TEMPLATE:
+        try:
+            log.debug("Attempting to load template...")
+            src = PPTX_TEMPLATE
+            if hasattr(PPTX_TEMPLATE, "slides") and hasattr(PPTX_TEMPLATE, "save"):
+                log.debug("Template is a Presentation object, converting to BytesIO")
+                buf = BytesIO()
+                PPTX_TEMPLATE.save(buf); buf.seek(0)
+                src = buf
+
+            tmp = Presentation(src)
+            log.debug(f"Template loaded with {len(tmp.slides)} slides")
+            if len(tmp.slides) >= 1:
+                prs = tmp
+                use_template = True
+
+                # If the template has 2+ slides: slide 0 = title layout, slide 1 = content layout
+                # If it has exactly 1 slide: use slide 0 layout for BOTH title and content
+                title_layout = prs.slides[0].slide_layout
+                content_layout = prs.slides[1].slide_layout if len(prs.slides) >= 2 else prs.slides[0].slide_layout
+                log.debug("Using template layouts")
+
+                # Keep only the first slide (as title base)
+                for i in range(len(prs.slides) - 1, 0, -1):
+                    rId = prs.slides._sldIdLst[i].rId  # type: ignore[attr-defined]
+                    prs.part.drop_rel(rId)
+                    del prs.slides._sldIdLst[i]        # type: ignore[attr-defined]
+            # else -> fall through to no-template
+        except Exception:
+            log.error(f"Error loading template: {e}")
+            use_template = False
+            prs = None
+
+    if not use_template:
+        log.debug("No valid template, creating new presentation with default layouts")
+        prs = Presentation()
+        title_layout = prs.slide_layouts[0]
+        content_layout = prs.slide_layouts[1]
+
+    # Title slide (either existing template title, or newly added)
+    if use_template:
+        log.debug("Using template title slide")
+        tslide = prs.slides[0]
+        if tslide.shapes.title:
+            tslide.shapes.title.text = title or ""
+            for p in tslide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = PptPt(28); r.font.bold = True
+    else:
+        log.debug("Creating new title slide")
+        tslide = prs.slides.add_slide(title_layout)
+        if tslide.shapes.title:
+            tslide.shapes.title.text = title or ""
+            for p in tslide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = PptPt(28); r.font.bold = True
+
+    # slide size in inches (for robust layout math)
+    EMU_PER_IN = 914400
+    slide_w_in = prs.slide_width / EMU_PER_IN
+    slide_h_in = prs.slide_height / EMU_PER_IN
+    log.debug(f"Slide dimensions: {slide_w_in} x {slide_h_in} inches")
+
+    # shared margins/gutters
+    page_margin = 0.5   # outer margin on each side (inches)
+    gutter = 0.3        # space between image and text (inches)
+
+    # --- shared path: add content slides ---
+    for slide_data in slides_data:
+        log.debug(f"Processing slide {i+1}: {slide_data.get('title', 'Untitled')}")
         if not isinstance(slide_data, dict):
+            log.warning(f"Slide data is not a dict, skipping slide {i+1}")
             continue
-        slide_layout = prs.slide_layouts[1]
-        slide = prs.slides.add_slide(slide_layout)
+
         slide_title = slide_data.get("title", "Untitled")
         content_list = slide_data.get("content", [])
         if not isinstance(content_list, list):
             content_list = [content_list]
+        log.debug(f"Adding slide with title: '{slide_title}'")
+        slide = prs.slides.add_slide(content_layout)
 
-        content_shape = slide.placeholders[1]
-        content_shape.text = ""  
-        font_size = dynamic_font_size(content_list, max_chars=300, base_size=24, min_size=12)    
-   
-        title_shape = slide.shapes.title
-        title_shape.text = slide_title
-        for paragraph in title_shape.text_frame.paragraphs:
-            for run in paragraph.runs:
-                run.font.size = Pt(28)
-                run.font.bold = True
+        # Title
+        if slide.shapes.title:
+            slide.shapes.title.text = slide_title
+            for p in slide.shapes.title.text_frame.paragraphs:
+                for r in p.runs:
+                    r.font.size = PptPt(28); r.font.bold = True
 
+        # Find or create a content shape
+        content_shape = None
+        try:
+            for ph in slide.placeholders:
+                try:
+                    if ph.placeholder_format.idx == 1:
+                        content_shape = ph; break
+                except Exception:
+                    pass
+            if content_shape is None:
+                for ph in slide.placeholders:
+                    try:
+                        if ph.placeholder_format.idx != 0:
+                            content_shape = ph; break
+                    except Exception:
+                        pass
+        except Exception:
+            log.error(f"Error finding content placeholder: {e}")
+            pass
 
-        for line in content_list:
-            p = content_shape.text_frame.add_paragraph()
-            run = p.add_run()
-            run.text = line
-            run.font.size = font_size
-            run.font.name = "Calibri"
-            p.space_after = Pt(6)
+        # Calculate title bottom position for proper image placement
+        title_bottom_in = 1.0  # default fallback
+        if slide.shapes.title:
+            try:
+                # Convert EMU to inches for title bottom position
+                title_bottom_emu = slide.shapes.title.top + slide.shapes.title.height
+                title_bottom_in = max(title_bottom_emu / EMU_PER_IN, 1.0)
+                # Add small padding below title
+                title_bottom_in += 0.2
+            except Exception:
+                title_bottom_in = 1.2  # fallback with padding
 
+        if content_shape is None:
+
+            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(title_bottom_in), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - title_bottom_in - page_margin))
+            log.debug("Creating new textbox for content")
+        # prep text frame: wrap + shrink-to-fit + small inner margins
+        tf = content_shape.text_frame
+        try:
+            tf.clear()
+        except Exception:
+            log.error(f"Error clearing text frame: {e}")
+            pass
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        try:
+            tf.margin_left = Inches(0.1)
+            tf.margin_right = Inches(0.1)
+            tf.margin_top = Inches(0.05)
+            tf.margin_bottom = Inches(0.05)
+        except Exception:
+            pass
+
+        # default content box (will adjust if image present)
+        content_left_in, content_top_in = page_margin, title_bottom_in
+        content_width_in = slide_w_in - 2*page_margin
+        content_height_in = slide_h_in - (title_bottom_in + page_margin)
+
+        # Optional image placement with proper content reflow
         image_query = slide_data.get("image_query")
         if image_query:
-            log.debug(f"Searching for image query: '{image_query}'")
             image_url = search_image(image_query)
             if image_url:
-                log.debug(f"Downloading image from URL: {image_url}")
-                image_data = requests.get(image_url).content
-                image_stream = BytesIO(image_data)
-                position = slide_data.get("image_position", "right")
-                size = slide_data.get("image_size", "medium")
-                if size == "small":
-                    width = Inches(2)
-                    height = Inches(1.5)
-                elif size == "large":
-                    width = Inches(4)
-                    height = Inches(3)
-                else:
-                    width = Inches(3)
-                    height = Inches(2)
-                if position == "left":
-                    left = Inches(0.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(4.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                elif position == "right":
-                    left = Inches(5.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                elif position == "top":
-                    left = Inches(5.5)
-                    top = Inches(0.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(2.5)
-                    content_shape.width = Inches(7)
-                    content_shape.height = Inches(3)
-                elif position == "bottom":
-                    left = Inches(5.5)
-                    top = Inches(4.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(0.5)
-                    content_shape.width = Inches(7)
-                    content_shape.height = Inches(3)
-                else:  
-                    left = Inches(5.5)
-                    top = Inches(1.5)
-                    content_shape.left = Inches(0.5)
-                    content_shape.top = Inches(1.5)
-                    content_shape.width = Inches(5)
-                    content_shape.height = Inches(4)
-                slide.shapes.add_picture(image_stream, left, top, width, height)
-        else:
-            content_shape.left = Inches(0.5)
-            content_shape.top = Inches(1.5)
-            content_shape.width = Inches(7)
-            content_shape.height = Inches(4)
+                log.debug(f"Searching for image query: '{image_query}'")
+                try:
+                    log.debug(f"Downloading image from URL: {image_url}")
+                    response = requests.get(image_url, timeout=30)
+                    response.raise_for_status()
+                    image_data = response.content
+                    image_stream = BytesIO(image_data)
+                    pos = slide_data.get("image_position", "right")
+                    size = slide_data.get("image_size", "medium")
+                    if size == "small":
+                        img_w_in, img_h_in = 2.0, 1.5
+                    elif size == "large":
+                        img_w_in, img_h_in = 4.0, 3.0
+                    else:
+                        img_w_in, img_h_in = 3.0, 2.0
+                    log.debug(f"Image dimensions: {img_w_in} x {img_h_in} inches")
+
+                    if pos == "left":
+                        img_left_in = page_margin
+                        img_top_in = title_bottom_in
+                        content_left_in = img_left_in + img_w_in + gutter
+                        content_top_in = title_bottom_in
+                        content_width_in = max(slide_w_in - page_margin - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
+                    elif pos == "right":
+                        img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
+                        img_top_in = title_bottom_in
+                        content_left_in = page_margin
+                        content_top_in = title_bottom_in
+                        content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
+                    elif pos == "top":
+                        img_left_in = slide_w_in - page_margin - img_w_in
+                        img_top_in = title_bottom_in
+                        content_left_in = page_margin
+                        content_top_in = img_top_in + img_h_in + gutter
+                        content_width_in = slide_w_in - 2*page_margin
+                        content_height_in = max(slide_h_in - page_margin - content_top_in, 2.0)
+                    elif pos == "bottom":
+                        img_left_in = slide_w_in - page_margin - img_w_in
+                        img_top_in = max(slide_h_in - page_margin - img_h_in, page_margin)
+                        content_left_in = page_margin
+                        content_top_in = title_bottom_in
+                        content_width_in = slide_w_in - 2*page_margin
+                        content_height_in = max(img_top_in - gutter - content_top_in, 2.0)
+                    else:
+                        img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
+                        img_top_in = title_bottom_in
+                        content_left_in = page_margin
+                        content_top_in = title_bottom_in
+                        content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
+
+                    slide.shapes.add_picture(image_stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
+                    log.debug(f"Image added at position: left={img_left_in}, top={img_top_in}")
+                except Exception:
+                    pass
+
+        # apply content box geometry
+        try:
+            content_shape.left = Inches(content_left_in)
+            content_shape.top = Inches(content_top_in)
+            content_shape.width = Inches(content_width_in)
+            content_shape.height = Inches(content_height_in)
+        except Exception:
+            pass
+
+        # estimate capacity to guide initial font size; autosize will fine-tune
+        approx_chars_per_in = 9.5
+        approx_lines_per_in = 1.6
+        # Ensure positive dimensions to avoid calculation issues
+        safe_width = max(content_width_in, 0.1)
+        safe_height = max(content_height_in, 0.1)
+        est_capacity = int(safe_width * approx_chars_per_in * safe_height * approx_lines_per_in)
+        font_size = dynamic_font_size(content_list, max_chars=max(est_capacity, 120), base_size=24, min_size=12)
+
+        # Ensure we still have a valid text frame after geometry changes
+        try:
+            tf = content_shape.text_frame
+        except Exception:
+            # If text frame access fails, try to recreate
+            try:
+                tf = content_shape.text_frame
+            except Exception:
+                log.warning("Could not access text frame for content shape")
+                continue
+
+        if not tf.paragraphs:
+            tf.add_paragraph()
+        for idx, line in enumerate(content_list):
+            p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+            run = p.add_run()
+            run.text = str(line) if line is not None else ""
+            run.font.size = font_size
+            p.space_after = PptPt(6)
 
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
-def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None) -> dict:
+def _create_word(content: list[dict] | str, filename: str, folder_path: str | None = None, title: str | None = None) -> dict:
     log.debug("Creating Word document")
 
     if isinstance(content, str):
@@ -711,7 +986,60 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
         fname = filename
     else:
         filepath, fname = _generate_filename(folder_path, "docx")
-    doc = Document()
+
+    # Template handling similar to create_presentation
+    use_template = False
+    doc = None
+
+    if DOCX_TEMPLATE:
+        try:
+            src = DOCX_TEMPLATE
+            if hasattr(DOCX_TEMPLATE, "paragraphs") and hasattr(DOCX_TEMPLATE, "save"):
+                # If DOCX_TEMPLATE is already a Document object, create a copy
+                from io import BytesIO
+                buf = BytesIO()
+                DOCX_TEMPLATE.save(buf)
+                buf.seek(0)
+                src = buf
+
+            # Load template document
+            doc = Document(src)
+            use_template = True
+            log.debug("Using DOCX template")
+
+            # Properly clear existing content while preserving styles
+            # Remove all paragraphs and tables
+            for element in doc.element.body:
+                if element.tag.endswith('}p') or element.tag.endswith('}tbl'):
+                    doc.element.body.remove(element)
+
+        except Exception as e:
+            log.warning(f"Failed to load DOCX template: {e}")
+            use_template = False
+            doc = None
+
+    if not use_template:
+        doc = Document()
+        log.debug("Creating new Word document without template")
+
+    # Add title if provided
+    if title:
+        title_paragraph = doc.add_paragraph(title)
+        try:
+            title_paragraph.style = doc.styles['Title']
+        except KeyError:
+            # Fallback if template doesn't have Title style
+            try:
+                title_paragraph.style = doc.styles['Heading 1']
+            except KeyError:
+                # Manual formatting if no built-in styles available
+                run = title_paragraph.runs[0] if title_paragraph.runs else title_paragraph.add_run()
+                run.font.size = DocxPt(20)
+                run.font.bold = True
+        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        log.debug("Document title added")
+
+    # Add content to document
     for item in content or []:
         if isinstance(item, str):
             doc.add_paragraph(item)
@@ -736,12 +1064,24 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 item_type = item.get("type")
                 if item_type == "title":
                     paragraph = doc.add_paragraph(item.get("text", ""))
-                    paragraph.style = doc.styles['Heading 1']
+                    try:
+                        paragraph.style = doc.styles['Heading 1']
+                    except KeyError:
+                        # Fallback if template doesn't have Heading 1 style
+                        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+                        run.font.size = DocxPt(18)
+                        run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     log.debug("Title added")
                 elif item_type == "subtitle":
                     paragraph = doc.add_paragraph(item.get("text", ""))
-                    paragraph.style = doc.styles['Heading 2']
+                    try:
+                        paragraph.style = doc.styles['Heading 2']
+                    except KeyError:
+                        # Fallback if template doesn't have Heading 2 style
+                        run = paragraph.runs[0] if paragraph.runs else paragraph.add_run()
+                        run.font.size = DocxPt(16)
+                        run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     log.debug("Subtitle added")
                 elif item_type == "paragraph":
@@ -750,12 +1090,12 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 elif item_type == "list":
                     items = item.get("items", [])
                     for i, item_text in enumerate(items):
-                        if i == 0:
-                            paragraph = doc.add_paragraph(item_text)
+                        paragraph = doc.add_paragraph(item_text)
+                        try:
                             paragraph.style = doc.styles['List Bullet']
-                        else:
-                            paragraph = doc.add_paragraph(item_text)
-                            paragraph.style = doc.styles['List Bullet']
+                        except KeyError:
+                            # Fallback if template doesn't have List Bullet style
+                            paragraph.style = doc.styles['Normal']
                     log.debug("List added")
                 elif item_type == "image":
                     image_query = item.get("query")
@@ -772,14 +1112,72 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                 elif item_type == "table":
                     data = item.get("data", [])
                     if data:
+                        # Check if template has existing tables to copy style from
+                        template_table_style = None
+                        if use_template and DOCX_TEMPLATE:
+                            try:
+                                # Look for existing tables in the original template
+                                for table in DOCX_TEMPLATE.tables:
+                                    if table.style:
+                                        template_table_style = table.style
+                                        break
+                            except Exception:
+                                pass
+                        
                         table = doc.add_table(rows=len(data), cols=len(data[0]) if data else 0)
+                        
+                        # Apply template table style
+                        if template_table_style:
+                            try:
+                                table.style = template_table_style
+                                log.debug(f"Applied template table style: {template_table_style.name}")
+                            except Exception as e:
+                                log.debug(f"Could not apply template table style: {e}")
+                        else:
+                            # Try to apply a built-in table style
+                            try:
+                                # Try common built-in styles
+                                for style_name in ['Table Grid', 'Light Grid Accent 1', 'Medium Grid 1 Accent 1', 'Light List Accent 1']:
+                                    try:
+                                        table.style = doc.styles[style_name]
+                                        log.debug(f"Applied built-in table style: {style_name}")
+                                        break
+                                    except KeyError:
+                                        continue
+                            except Exception as e:
+                                log.debug(f"Could not apply any table style: {e}")
+                        
+                        # Fill table data
                         for i, row in enumerate(data):
                             for j, cell in enumerate(row):
-                                table.cell(i, j).text = str(cell)
-                        log.debug("Table added")
+                                cell_obj = table.cell(i, j)
+                                cell_obj.text = str(cell)
+                                
+                                # Apply header formatting to first row
+                                if i == 0:
+                                    for paragraph in cell_obj.paragraphs:
+                                        for run in paragraph.runs:
+                                            run.font.bold = True
+                                        # Center align header text
+                                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        
+                        # Additional table formatting if no style was applied
+                        if not template_table_style:
+                            try:
+                                
+                                # Add borders to table
+                                tbl = table._tbl
+                                tblPr = tbl.tblPr
+                                tblBorders = parse_xml(r'<w:tblBorders {}><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>'.format(nsdecls('w')))
+                                tblPr.append(tblBorders)
+                            except Exception as e:
+                                log.debug(f"Could not add table borders: {e}")
+                        
+                        log.debug("Table added with improved styling")
             elif "text" in item:
                 doc.add_paragraph(item["text"])
                 log.debug("Paragraph added")
+    
     doc.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
@@ -827,7 +1225,7 @@ def create_file(data: dict, persistent: bool = PERSISTENT_FILES) -> dict:
     elif format_type == "pptx":
         result = _create_presentation(data.get("slides_data", []), filename, folder_path=folder_path, title=title)
     elif format_type == "docx":
-        result = _create_word(content if content is not None else [], filename, folder_path=folder_path)
+        result = _create_word(content if content is not None else [], filename, folder_path=folder_path, title=title)
     elif format_type == "xlsx":
         result = _create_excel(content if content is not None else [], filename, folder_path=folder_path)
     elif format_type == "csv":
@@ -859,13 +1257,14 @@ def generate_and_archive(files_data: list[dict], archive_format: str = "zip", ar
         fname = file_info.get("filename")
         content = file_info.get("content")
         title = file_info.get("title")
+
         try:
             if fmt == "pdf":
                 res = _create_pdf(content if isinstance(content, list) else [str(content or "")], fname, folder_path=folder_path)
             elif fmt == "pptx":
                 res = _create_presentation(file_info.get("slides_data", []), fname, folder_path=folder_path, title=title)
             elif fmt == "docx":
-                res = _create_word(content if content is not None else [], fname, folder_path=folder_path)
+                res = _create_word(content if content is not None else [], fname, folder_path=folder_path, title=title)
             elif fmt == "xlsx":
                 res = _create_excel(content if content is not None else [], fname, folder_path=folder_path)
             elif fmt == "csv":

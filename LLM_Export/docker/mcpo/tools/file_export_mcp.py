@@ -964,7 +964,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             run = p.add_run()
             run.text = str(line) if line is not None else ""
             run.font.size = font_size
-            p.space_after = Pt(6)
+            p.space_after = PptPt(6)
 
     prs.save(filepath)
     return {"url": _public_url(folder_path, fname), "path": filepath}
