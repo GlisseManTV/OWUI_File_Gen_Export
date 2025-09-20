@@ -20,7 +20,6 @@ from PIL import Image
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-
 from docx.oxml.shared import qn
 from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
@@ -59,7 +58,7 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 
-DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_DIR", "/rootPath/templates")
+DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_DIR", "/templates")
 PPTX_TEMPLATE = None
 DOCX_TEMPLATE = None
 XLSX_TEMPLATE = None
