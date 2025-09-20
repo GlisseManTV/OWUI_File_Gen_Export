@@ -40,14 +40,12 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.units import mm
 
-
 PERSISTENT_FILES = os.getenv("PERSISTENT_FILES", "false")
 FILES_DELAY = int(os.getenv("FILES_DELAY", 60)) 
 
 EXPORT_DIR_ENV = os.getenv("FILE_EXPORT_DIR")
 EXPORT_DIR = (EXPORT_DIR_ENV or r"/output").rstrip("/")
 os.makedirs(EXPORT_DIR, exist_ok=True)
-
 
 BASE_URL_ENV = os.getenv("FILE_EXPORT_BASE_URL")
 BASE_URL = (BASE_URL_ENV or "http://localhost:9003/files").rstrip("/")
@@ -56,7 +54,6 @@ LOG_LEVEL_ENV = os.getenv("LOG_LEVEL")
 LOG_FORMAT_ENV = os.getenv(
     "LOG_FORMAT", "%(asctime)s %(levelname)s %(name)s - %(message)s"
 )
-
 
 DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_DIR", "/rootPath/templates")
 PPTX_TEMPLATE = None
@@ -104,14 +101,11 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
         try:
             XLSX_TEMPLATE = load_workbook(XLSX_TEMPLATE_PATH)
         except Exception as e:
-            log.warning(f"Failed to load XLSX template: {e}")
+            logging.warning(f"Failed to load XLSX template: {e}")
             XLSX_TEMPLATE = None
     else:
         logging.debug("No XLSX template found. Creation of a blank document.")
         XLSX_TEMPLATE = None
-
-
-
 
 def search_image(query):
     log.debug(f"Searching for image with query: '{query}'")
