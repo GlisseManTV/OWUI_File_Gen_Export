@@ -35,7 +35,7 @@ from pptx.util import Pt as PptPt
 from pptx.parts.image import Image
 from pptx.enum.text import MSO_AUTO_SIZE
 from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ListFlowable, ListItem, Image as ReportLabImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -706,7 +706,6 @@ def _create_pdf(text: str | list[str], filename: str, folder_path: str | None = 
     return {"url": _public_url(folder_path, fname), "path": filepath}
 
 def _create_presentation(slides_data: list[dict], filename: str, folder_path: str | None = None, title: str | None = None) -> dict:
-    log.debug("Creating PowerPoint presentation")
     if folder_path is None:
         folder_path = _generate_unique_folder()
     if filename:
@@ -715,8 +714,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         fname = filename
     else:
         filepath, fname = _generate_filename(folder_path, "pptx")
-    
-    
+      
     use_template = False
     prs = None
     title_layout = None
@@ -829,10 +827,23 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         except Exception:
             log.error(f"Error finding content placeholder: {e}")
             pass
-        if content_shape is None:
-            log.debug("Creating new textbox for content")
-            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(1.5), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - 2.0))
 
+        # Calculate title bottom position for proper image placement
+        title_bottom_in = 1.0  # default fallback
+        if slide.shapes.title:
+            try:
+                # Convert EMU to inches for title bottom position
+                title_bottom_emu = slide.shapes.title.top + slide.shapes.title.height
+                title_bottom_in = max(title_bottom_emu / EMU_PER_IN, 1.0)
+                # Add small padding below title
+                title_bottom_in += 0.2
+            except Exception:
+                title_bottom_in = 1.2  # fallback with padding
+
+        if content_shape is None:
+
+            content_shape = slide.shapes.add_textbox(Inches(page_margin), Inches(title_bottom_in), Inches(slide_w_in - 2*page_margin), Inches(slide_h_in - title_bottom_in - page_margin))
+            log.debug("Creating new textbox for content")
         # prep text frame: wrap + shrink-to-fit + small inner margins
         tf = content_shape.text_frame
         try:
@@ -851,9 +862,9 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
             pass
 
         # default content box (will adjust if image present)
-        content_left_in, content_top_in = page_margin, 1.5
+        content_left_in, content_top_in = page_margin, title_bottom_in
         content_width_in = slide_w_in - 2*page_margin
-        content_height_in = slide_h_in - (1.5 + page_margin)
+        content_height_in = slide_h_in - (title_bottom_in + page_margin)
 
         # Optional image placement with proper content reflow
         image_query = slide_data.get("image_query")
@@ -863,7 +874,9 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                 log.debug(f"Searching for image query: '{image_query}'")
                 try:
                     log.debug(f"Downloading image from URL: {image_url}")
-                    image_data = requests.get(image_url).content
+                    response = requests.get(image_url, timeout=30)
+                    response.raise_for_status()
+                    image_data = response.content
                     image_stream = BytesIO(image_data)
                     pos = slide_data.get("image_position", "right")
                     size = slide_data.get("image_size", "medium")
@@ -877,21 +890,21 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
 
                     if pos == "left":
                         img_left_in = page_margin
-                        img_top_in = 1.5
+                        img_top_in = title_bottom_in
                         content_left_in = img_left_in + img_w_in + gutter
-                        content_top_in = 1.5
+                        content_top_in = title_bottom_in
                         content_width_in = max(slide_w_in - page_margin - content_left_in, 2.5)
-                        content_height_in = slide_h_in - (1.5 + page_margin)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
                     elif pos == "right":
                         img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
-                        img_top_in = 1.5
+                        img_top_in = title_bottom_in
                         content_left_in = page_margin
-                        content_top_in = 1.5
+                        content_top_in = title_bottom_in
                         content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
-                        content_height_in = slide_h_in - (1.5 + page_margin)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
                     elif pos == "top":
                         img_left_in = slide_w_in - page_margin - img_w_in
-                        img_top_in = page_margin
+                        img_top_in = title_bottom_in
                         content_left_in = page_margin
                         content_top_in = img_top_in + img_h_in + gutter
                         content_width_in = slide_w_in - 2*page_margin
@@ -900,16 +913,16 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
                         img_left_in = slide_w_in - page_margin - img_w_in
                         img_top_in = max(slide_h_in - page_margin - img_h_in, page_margin)
                         content_left_in = page_margin
-                        content_top_in = 1.0
+                        content_top_in = title_bottom_in
                         content_width_in = slide_w_in - 2*page_margin
                         content_height_in = max(img_top_in - gutter - content_top_in, 2.0)
                     else:
                         img_left_in = max(slide_w_in - page_margin - img_w_in, page_margin)
-                        img_top_in = 1.5
+                        img_top_in = title_bottom_in
                         content_left_in = page_margin
-                        content_top_in = 1.5
+                        content_top_in = title_bottom_in
                         content_width_in = max(img_left_in - gutter - content_left_in, 2.5)
-                        content_height_in = slide_h_in - (1.5 + page_margin)
+                        content_height_in = slide_h_in - (title_bottom_in + page_margin)
 
                     slide.shapes.add_picture(image_stream, Inches(img_left_in), Inches(img_top_in), Inches(img_w_in), Inches(img_h_in))
                     log.debug(f"Image added at position: left={img_left_in}, top={img_top_in}")
@@ -928,15 +941,29 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
         # estimate capacity to guide initial font size; autosize will fine-tune
         approx_chars_per_in = 9.5
         approx_lines_per_in = 1.6
-        est_capacity = int(content_width_in * approx_chars_per_in * content_height_in * approx_lines_per_in)
+        # Ensure positive dimensions to avoid calculation issues
+        safe_width = max(content_width_in, 0.1)
+        safe_height = max(content_height_in, 0.1)
+        est_capacity = int(safe_width * approx_chars_per_in * safe_height * approx_lines_per_in)
         font_size = dynamic_font_size(content_list, max_chars=max(est_capacity, 120), base_size=24, min_size=12)
+
+        # Ensure we still have a valid text frame after geometry changes
+        try:
+            tf = content_shape.text_frame
+        except Exception:
+            # If text frame access fails, try to recreate
+            try:
+                tf = content_shape.text_frame
+            except Exception:
+                log.warning("Could not access text frame for content shape")
+                continue
 
         if not tf.paragraphs:
             tf.add_paragraph()
         for idx, line in enumerate(content_list):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
             run = p.add_run()
-            run.text = line
+            run.text = str(line) if line is not None else ""
             run.font.size = font_size
             p.space_after = Pt(6)
 
