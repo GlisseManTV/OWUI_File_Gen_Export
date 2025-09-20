@@ -82,9 +82,16 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     if PPTX_TEMPLATE_PATH:
         PPTX_TEMPLATE = Presentation(PPTX_TEMPLATE_PATH)
         logging.debug(f"Using PPTX template: {PPTX_TEMPLATE_PATH}")
-    if DOCX_TEMPLATE_PATH:
-        DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
-        logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+    if DOCX_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
+        try:
+            DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
+            logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
+        except Exception as e:
+        log.warning(f"DOCX template failed to load : {e}")
+        DOCX_TEMPLATE = None
+    else:
+        log.info("No DOCX template found. Creation of a blank document.")
+        DOCX_TEMPLATE = None
     
     if XLSX_TEMPLATE_PATH:
         from openpyxl import load_workbook
@@ -787,7 +794,7 @@ def _create_presentation(slides_data: list[dict], filename: str, folder_path: st
     gutter = 0.3        # space between image and text (inches)
 
     # --- shared path: add content slides ---
-    for slide_data in slides_data:
+    for i, slide_data in enumerate(slides_data):
         log.debug(f"Processing slide {i+1}: {slide_data.get('title', 'Untitled')}")
         if not isinstance(slide_data, dict):
             log.warning(f"Slide data is not a dict, skipping slide {i+1}")
