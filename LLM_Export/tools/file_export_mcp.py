@@ -59,7 +59,7 @@ LOG_FORMAT_ENV = os.getenv(
 )
 
 
-DOCS_TEMPLATE_PATH = os.getenv("DOCS_TEMPLATE_DIR", "/rootPath/templates")
+DOCS_TEMPLATE_PATH = (os.getenv("DOCS_TEMPLATE_DIR") or os.path.join(DEFAULT_PATH_ENV, "templates")).rstrip("/"))
 PPTX_TEMPLATE = None
 DOCX_TEMPLATE = None
 XLSX_TEMPLATE = None
