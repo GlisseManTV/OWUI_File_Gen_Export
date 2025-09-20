@@ -87,10 +87,10 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
             DOCX_TEMPLATE = Document(DOCX_TEMPLATE_PATH)
             logging.debug(f"Using DOCX template: {DOCX_TEMPLATE_PATH}")
         except Exception as e:
-            log.warning(f"DOCX template failed to load : {e}")
+            logging.warning(f"DOCX template failed to load : {e}")
             DOCX_TEMPLATE = None
     else:
-        log.info("No DOCX template found. Creation of a blank document.")
+        logging.debug("No DOCX template found. Creation of a blank document.")
         DOCX_TEMPLATE = None
     
     if XLSX_TEMPLATE_PATH:
