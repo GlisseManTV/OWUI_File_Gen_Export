@@ -1154,7 +1154,7 @@ def _create_word(content: list[dict] | str, filename: str, folder_path: str | No
                         
                         if not template_table_style:
                             try:
-                                                                tbl = table._tbl
+                                tbl = table._tbl
                                 tblPr = tbl.tblPr
                                 tblBorders = parse_xml(r'<w:tblBorders {}><w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tblBorders>'.format(nsdecls('w')))
                                 tblPr.append(tblBorders)
