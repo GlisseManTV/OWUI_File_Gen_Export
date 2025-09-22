@@ -639,20 +639,85 @@ def _create_excel(data: list[list[str]], filename: str, folder_path: str | None 
         try:
             log.debug("Loading XLSX template...")
             wb = load_workbook(XLSX_TEMPLATE_PATH) 
-            ws = wb.active
             log.debug(f"Template loaded with {len(wb.sheetnames)} sheet(s)")
         except Exception as e:
             log.warning(f"Failed to load XLSX template: {e}")
             wb = Workbook()
-            ws = wb.active
     else:
         log.debug("No XLSX template available, creating new workbook")
         wb = Workbook()
-        ws = wb.active
 
-    if isinstance(data, list):
-        for row in data:
-            ws.append(row)
+    ws = wb.active
+
+    from openpyxl.utils import get_column_letter 
+
+    
+    if title:
+        ws.title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()[:31]
+        title_cell_found = False
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value and isinstance(cell.value, str) and "title" in cell.value.lower():
+                    # Found a cell containing "title", insert the title in the next cell in the same row
+                    next_col = cell.column + 1
+                    title_target_cell = ws.cell(row=cell.row, column=next_col)
+                    title_target_cell.value = title
+                    
+                    # Apply some formatting to make it stand out
+                    from openpyxl.styles import Font
+                    title_target_cell.font = Font(bold=True, size=12)
+                    
+                    log.debug(f"Title '{title}' inserted in cell {get_column_letter(next_col)}{cell.row} next to 'title' label in {get_column_letter(cell.column)}{cell.row}")
+                    title_cell_found = True
+                    break
+            if title_cell_found:
+                break
+    
+    start_row, start_col = 1, 1
+    if ws.auto_filter and ws.auto_filter.ref:
+        try:
+            from openpyxl.utils import range_boundaries
+            start_col, start_row, _, _ = range_boundaries(ws.auto_filter.ref)
+        except: pass
+
+    if not data:
+        wb.save(filepath)
+        return {"success": True, "filepath": filepath, "filename": filename}
+
+    # Clear and insert data in one pass
+    template_border = ws.cell(start_row, start_col).border
+    has_borders = template_border and any([template_border.top.style, template_border.bottom.style, 
+                                          template_border.left.style, template_border.right.style])
+    
+    # Clear old data and insert new data
+    for r in range(max(len(data) + 10, 50)):
+        for c in range(max(len(data[0]) + 5, 20)):
+            cell = ws.cell(row=start_row + r, column=start_col + c)
+            
+            if r < len(data) and c < len(data[0]):
+                # Insert our data
+                cell.value = data[r][c]
+                if r == 0 and data[r][c]:  # Header - fix deprecation warning
+                    from openpyxl.styles import Font
+                    cell.font = Font(bold=True)
+                if has_borders:  # Copy borders
+                    from openpyxl.styles import Border
+                    cell.border = Border(top=template_border.top, bottom=template_border.bottom,
+                                       left=template_border.left, right=template_border.right)
+            else:
+                # Clear unused cells
+                cell.value = None
+                if cell.has_style:
+                    from openpyxl.styles import Font, PatternFill, Border, Alignment
+                    cell.font, cell.fill, cell.border, cell.alignment = Font(), PatternFill(), Border(), Alignment()
+
+    # Update autofilter and column widths
+    if ws.auto_filter:
+        ws.auto_filter.ref = f"{get_column_letter(start_col)}{start_row}:{get_column_letter(start_col + len(data[0]) - 1)}{start_row + len(data) - 1}"
+    
+    for c in range(len(data[0])):
+        max_len = max(len(str(data[r][c])) for r in range(len(data)))
+        ws.column_dimensions[get_column_letter(start_col + c)].width = min(max_len + 2, 50)
 
     wb.save(filepath)
 
