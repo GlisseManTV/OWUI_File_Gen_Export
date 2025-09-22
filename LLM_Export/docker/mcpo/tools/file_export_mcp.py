@@ -96,6 +96,9 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     else:
         logging.debug("No DOCX template found. Creation of a blank document.")
         DOCX_TEMPLATE = None
+    
+    #Todo 
+    XLSX_TEMPLATE_PATH = os.path.join("/rootPath/templates","Default_Template.xlsx")
 
     if XLSX_TEMPLATE_PATH:
         try:
@@ -106,6 +109,9 @@ if DOCS_TEMPLATE_PATH and os.path.exists(DOCS_TEMPLATE_PATH):
     else:
         logging.debug("No XLSX template found. Creation of a blank document.")
         XLSX_TEMPLATE = None
+
+
+
 
 def search_image(query):
     log.debug(f"Searching for image with query: '{query}'")
